@@ -1,0 +1,23 @@
+{
+  "name": "diskbased_json_array",
+  "version": "1.0.0",
+  "description": "file based random access json array",
+  "main": "randomaccess.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PSeitz/diskbased_json_array.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/PSeitz/diskbased_json_array/issues"
+  },
+  "homepage": "https://github.com/PSeitz/diskbased_json_array#readme",
+  "dependencies": {
+    "bluebird": "^3.4.6",
+    "msgpack-lite": "^0.1.26"
+  }
+}
