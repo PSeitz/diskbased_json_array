@@ -1,6 +1,7 @@
 'use strict'
 let msgpack = require("msgpack-lite");
 let fs = require("fs");
+let _ = require("lodash");
 let Promise = require("bluebird")
 
 let useMsgPack = true
@@ -39,37 +40,31 @@ function writeArray(filename, arr){
     offsets.push(currentOffset)
     fs.closeSync(fd)
 
-    console.log(offsets[1000]);
     fs.writeFileSync(filename+'.offsets', new Buffer(new Uint32Array(offsets).buffer))
 
 }
 
-// console.time("jmdict.json")
-// let data = require("./jmdict.json")
-// console.timeEnd("jmdict.json")
-// writeArray('random.data', data)
 
+class Loader{
+    constructor(filename){
+        this.filename = filename
+        this.offsets = new Uint32Array(fs.readFileSync(filename+".offsets").buffer)
+    }
+    getObjectAtPos(pos){
+        return getObject(this.filename, this.offsets[pos], this.offsets[pos+1] - this.offsets[pos])
+    }
+    getObjectsAtPos(positions){
+        return Promise.map(positions, pos => getObjectAtPos(this.filename, pos, this.offsets))
+    }
 
-console.time("random.data.offsets")
-let offsets = new Uint32Array(fs.readFileSync("random.data.offsets").buffer)
-console.timeEnd("random.data.offsets")
-
-// console.log(offsets[1000]);
-
-console.time("readall")
-getObjectsAtPos('random.data', [350, 500, 265, 255, 980, 350, 500, 265, 255, 980], offsets).then(data => {
-    console.timeEnd("readall")
-    // console.log(data);
-})
-
-
-// getObjectAtPos('random.data', 350, offsets).then((data) => {    
-//     console.log(data);
-// })
+}
 
 
 let service = {}
 service.writeArray = writeArray
 service.getObjectAtPos = getObjectAtPos
 service.getObjectsAtPos = getObjectsAtPos
+service.Loader = Loader
+module.exports = service
+
 
