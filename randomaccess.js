@@ -8,7 +8,7 @@ fs = Promise.promisifyAll(fs);
 
 let useMsgPack = true
 
-function getObject(file, offset, length, cb){
+function getDocAtOffset(file, offset, length, cb){
     let fd = fs.openSync('random.data', 'r')
     let buf = Buffer(length)
     fs.read(fd, buf, 0, length, offset, (err, bytesRead, buffer) => {
@@ -17,15 +17,7 @@ function getObject(file, offset, length, cb){
         cb(err, data)
     })
 }
-getObject = Promise.promisify(getObject);
-
-function getObjectAtPos(file, pos, offsets){
-    return getObject(file, offsets[pos], offsets[pos+1] - offsets[pos])
-}
-
-function getObjectsAtPos(file, positions, offsets){
-    return Promise.map(positions, pos => getObjectAtPos(file, pos, offsets))
-}
+getDocAtOffset = Promise.promisify(getDocAtOffset);
 
 function writeArray(filename, arr){
     let offsets = []
@@ -55,11 +47,11 @@ class Loader{
             return this.offsets
         })
     }
-    getObjectAtPos(pos){
-        return this.loadOffsets().then(off => getObject(this.filename, off[pos], off[pos+1] - off[pos]))
+    getDoc(pos){
+        return this.loadOffsets().then(off => getDocAtOffset(this.filename, off[pos], off[pos+1] - off[pos]))
     }
-    getObjectsAtPos(positions){
-        return  this.loadOffsets().then(off => Promise.map(positions, pos => getObjectAtPos(this.filename, pos, off)))
+    getDocs(positions){
+        return  this.loadOffsets().then(off => Promise.map(positions, pos => getDocAtOffset(this.filename, off[pos], off[pos+1] - off[pos])))
     }
     loadOffsets(){
         if (this.offsets) return Promise.resolve(this.offsets)
@@ -71,8 +63,6 @@ class Loader{
 
 let service = {}
 service.writeArray = writeArray
-service.getObjectAtPos = getObjectAtPos
-service.getObjectsAtPos = getObjectsAtPos
 service.Loader = Loader
 module.exports = service
 

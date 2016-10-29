@@ -55,13 +55,13 @@ var schema = {
 
 let loader = new randomaccess.Loader('random.data')
 console.time("readone")
-loader.getObjectAtPos(350).then(data => {
+loader.getDoc(350).then(data => {
     console.timeEnd("readone")
     console.log(data);
 })
 
 console.time("readall")
-loader.getObjectsAtPos([350, 500, 265, 255, 980, 350, 500, 265, 255, 980]).then(data => {
+loader.getDocs([350, 500, 265, 255, 980, 350, 500, 265, 255, 980]).then(data => {
     console.timeEnd("readall")
     // console.log(data);
 })
