@@ -1,8 +1,10 @@
 'use strict'
 let msgpack = require("msgpack-lite");
 let fs = require("fs");
+
 let _ = require("lodash");
 let Promise = require("bluebird")
+fs = Promise.promisifyAll(fs);
 
 let useMsgPack = true
 
@@ -48,13 +50,20 @@ function writeArray(filename, arr){
 class Loader{
     constructor(filename){
         this.filename = filename
-        this.offsets = new Uint32Array(fs.readFileSync(filename+".offsets").buffer)
+        this.offsetLoading = fs.readFileAsync(this.filename+".offsets").then(buf => {
+            this.offsets = new Uint32Array(buf.buffer, buf.offset, buf.buffer.length)
+            return this.offsets
+        })
     }
     getObjectAtPos(pos){
-        return getObject(this.filename, this.offsets[pos], this.offsets[pos+1] - this.offsets[pos])
+        return this.loadOffsets().then(off => getObject(this.filename, off[pos], off[pos+1] - off[pos]))
     }
     getObjectsAtPos(positions){
-        return Promise.map(positions, pos => getObjectAtPos(this.filename, pos, this.offsets))
+        return  this.loadOffsets().then(off => Promise.map(positions, pos => getObjectAtPos(this.filename, pos, off)))
+    }
+    loadOffsets(){
+        if (this.offsets) return Promise.resolve(this.offsets)
+        return this.offsetLoading
     }
 
 }

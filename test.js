@@ -60,7 +60,6 @@ loader.getObjectAtPos(350).then(data => {
     console.log(data);
 })
 
-
 console.time("readall")
 loader.getObjectsAtPos([350, 500, 265, 255, 980, 350, 500, 265, 255, 980]).then(data => {
     console.timeEnd("readall")

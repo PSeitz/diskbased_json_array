@@ -33,28 +33,19 @@ var example_schema = {
 
 function filterWithSchema(arr, schema){
 
-	return arr.map(entry => {
-	    let newEntry = {}
-	    for(let prop in schema){
-	        if (schema[prop] === true && entry[prop]) {
-	            newEntry[prop] = entry[prop]
-	        }else if(_.isArray(schema[prop]) && entry[prop]){
-	            let schemaEl = schema[prop][0]
+    return arr.map(entry => {
+        let newEntry = {}
+        for(let prop in schema){
+            if (schema[prop] === true && entry[prop]) {
+                newEntry[prop] = entry[prop]
+            }else if(_.isArray(schema[prop]) && entry[prop]){
+                let schemaEl = schema[prop][0]
 
-	            newEntry[prop] = entry[prop].map(entryEl => {
-	                let newEl = {}
-	                for(let schemaElProp in schemaEl){
-	                    if (schemaEl[schemaElProp] === true && entryEl[schemaElProp]) {
-	                        newEl[schemaElProp] = entryEl[schemaElProp]
-	                    }
-	                }
-	                return newEl
-	            })
-	        }
-	    }
-	    return newEntry
-	})
-
+                newEntry[prop] = filterWithSchema(entry[prop], schemaEl)
+            }
+        }
+        return newEntry
+    })
 
 }
 
