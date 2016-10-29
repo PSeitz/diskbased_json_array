@@ -9,7 +9,7 @@ fs = Promise.promisifyAll(fs);
 let useMsgPack = true
 
 function getDocAtOffset(file, offset, length, cb){
-    let fd = fs.openSync('random.data', 'r')
+    let fd = fs.openSync(file, 'r')
     let buf = Buffer(length)
     fs.read(fd, buf, 0, length, offset, (err, bytesRead, buffer) => {
         let data = useMsgPack ? msgpack.decode(buffer) : JSON.parse(buffer.toString())
