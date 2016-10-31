@@ -24,18 +24,20 @@ function search(field, term, levenshtein_distance){
     for (let i = 0; i < kanjitext.length; i++)
     {
         if(levenshtein.get(kanjitext[i], term) <= levenshtein_distance){
+            console.log("valueid "+i);
             hits.push(i)
         }
     }
 
     let mainIdBuf = fs.readFileSync('./'+field+'.mainIds')
     let mainIds = new Uint32Array(mainIdBuf.buffer, mainIdBuf.offset, mainIdBuf.buffer.length)
-
     
     let mainds = hits.map(valueId => mainIds[valueId])
 
-    // console.log(hits)
-    // console.log(mainds)
+    console.log("hits");
+    console.log(hits)
+    console.log("mainds");
+    console.log(mainds)
 
     // let randomaccess = require('./randomaccess')
     // let loader = new randomaccess.Loader('random.data')

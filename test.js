@@ -67,29 +67,30 @@ var schema = {
 // })
 
 
-// let searchindex = require('./searchindex')
-// let createindex = require('./createindex')
-// let data = require('./jmdict.json')
+let data = require('./jmdict.json')
+
 // randomaccess.writeArray('jmdict.data', data)
+let searchindex = require('./searchindex')
+let createindex = require('./createindex')
 
 
-// createindex.createFulltextIndex(data, 'kanji.text')
-// createindex.createBoostIndex(data, 'kanji.commonness')
+createindex.createFulltextIndex(data, 'kanji.text')
+createindex.createBoostIndex(data, 'kanji.commonness')
 
-// let searchTerm = '意慾'
-// let mainsIds = searchindex.search('kanji.text', searchTerm, 0)
-// console.log(mainsIds)
-
-// let loader = new randomaccess.Loader('jmdict.data')
-// loader.getDocs(mainsIds).then(data => {
-//     console.log(JSON.stringify(data.map(entry => entry.kanji), null, 2))
-// })
-
+let searchTerm = '意慾'
+let mainsIds = searchindex.search('kanji.text', searchTerm, 0)
+console.log(mainsIds)
 
 let loader = new randomaccess.Loader('jmdict.data')
-loader.getDocs([69724]).then(data => {
-    console.log(JSON.stringify(data, null, 2))
+loader.getDocs(mainsIds).then(data => {
+    console.log(JSON.stringify(data.map(entry => entry.kanji), null, 2))
 })
+
+
+// let loader = new randomaccess.Loader('jmdict.data')
+// loader.getDocs([69724]).then(data => {
+//     console.log(JSON.stringify(data, null, 2))
+// })
 
 
 

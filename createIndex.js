@@ -91,12 +91,11 @@ function createFulltextIndex(data, path){
     let mainIds = []
     let subObjIds = []
     let subObjId = 0
-    let mainId = -1
     let currentEl
-    data.forEach(entry => {
+    for (let mainId = 0; mainId < data.length; mainId++) {
+        let entry = data[mainId]
         currentEl = entry
         // let mainId = entry.ent_seq
-        mainId++
         for (let i = 0; i < paths.length; i++) {
             let comp = paths[i]
             if (currentEl[comp] === undefined) break
@@ -114,6 +113,13 @@ function createFulltextIndex(data, path){
                         mainIds.push(mainId)
                         subObjIds.push(subObjId)
 
+                        if (valId == 72473) {
+                            console.log("Creating ValueId " + valId)
+                            console.log(subarrEl[comp])
+                            console.log("mainId "+mainId)
+                            console.log(entry.ent_seq)
+                        }
+
                         // console.log(valId + " " + mainId + " " + subObjId);
                     }else{
                         throw new Error('level 3 not supported')
@@ -130,7 +136,7 @@ function createFulltextIndex(data, path){
 
         }
 
-    })
+    }
 
     fs.writeFileSync(path+'.mainIds', new Buffer(new Uint32Array(mainIds).buffer))
     fs.writeFileSync(path+'.subObjIds', new Buffer(new Uint32Array(subObjIds).buffer))
