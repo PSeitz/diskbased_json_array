@@ -1,146 +1,141 @@
 'use strict'
 var fs = require('fs')
-var _ = require('lodash');
+var _ = require('lodash')
 
 
-console.time("jaaa")
-var data = require("./jmdict.json");
-console.timeEnd("jaaa")
+// console.time('jaaa')
+// var data = require('./jmdictmin.json')
+// console.timeEnd('jaaa')
 
+// console.time('kanji.text')
+// var kanjitext = require('./kanji.text')
+// console.timeEnd('kanji.text')
 
 
 var example_schema = {
-    "pos": true,
-    "misc": true,
-    "kanji": [
+    'pos': true,
+    'misc': true,
+    'kanji': [
         {
-            "text": true,
-            "commonness": true,
-            "num_occurences": true,
-            "readings": true
+            'text': true,
+            'commonness': true,
+            'num_occurences': true,
+            'readings': true
         }
     ],
-    "kana": [
+    'kana': [
         {
-            "text": true,
-            "romaji": true,
-            "commonness": true,
-            "num_occurences": true
+            'text': true,
+            'romaji': true,
+            'commonness': true,
+            'num_occurences': true
         }
     ],
-    "meanings": [
+    'meanings': [
         {
-            "text": true,
-            "lang": true
+            'text': true,
+            'lang': true
         }
     ],
-    "ent_seq": true
-};
-
-function getPath(path){
-    return path.split(".")
+    'ent_seq': true
 }
 
-function addValue(values, value){
-    values.add(value)
-    return values.length()
+function binarySearch(arr, find) {
+    var low = 0, high = arr.length - 1,i
+    while (low <= high) {
+        i = Math.floor((low + high) / 2)
+        // comparison = comparator(arr[i], find);
+        if (arr[i] < find) { low = i + 1; continue }
+        if (arr[i] > find) { high = i - 1; continue }
+        return i
+    }
+    return null
 }
 
 function getValueID(data, value){
-    data.indexOf(value)
+    return binarySearch(data, value)
 }
 
-function isArray(pathComp){
-    if (comp.endsWith('[]')) {
-        return pathComp.substring(0, comp.length - 2);
-    }
-    return false
-}
-
-function getAllterms(arr, path, target){
-    path = path.split(".")
-    return arr.forEach(entry => {
-        for(let comp of path){
-            if (comp === true && entry[prop]) {
-                newEntry[prop] = entry[prop]
-            }else if(isArray(comp) && entry[prop]){
-                let schemaEl = comp[0]
-
-                newEntry[prop] = filterWithSchema(entry[prop], schemaEl)
+function getAllterms(arr, path, existingTerms){
+    let terms = existingTerms || {}
+    arr.forEach(entry => {
+        let current = entry
+        for (let i = 0; i < path.length; i++) {
+            let comp = path[i]
+            if (current[comp] === undefined) break
+            current = current[comp]
+            if(current && _.isArray(current)){
+                getAllterms(current, path.slice(i+1), terms)
+                // terms = terms.concat()
+            }else if (_.last(path) == comp){
+                terms[current] = true
             }
         }
     })
-
+    if (!existingTerms) return Object.keys(terms).sort() //Level 0
+    return terms
 }
 
-function getAllterms(data, path){
-
-    let allTerms = {}
-
-    for(let entry of data){
-        currentEl = entry
-        components.forEach(comp => {
-            if (comp.endsWith('[]')) {
-                comp = comp.substring(0, comp.length - 2);
-                currentEl = currentEl[comp]
-                let subarr = entry[comp]
-                for(let subarrEl of subarr){
-                    
-                }
-
-            }else{
-                currentEl = currentEl[comp]
-                if (_.last(components) == comp){
-                    allTerms[currentEl] = true
-                }
-            }
-
-        })
-
-    }
-
-    allTerms = Object.keys(allTerms)
-    allTerms.sort()
-    return allTerms
-}
+// let terms = getAllterms(data, "kanji.text".split("."))
+// console.log(terms[1000]);
 
 
 
 function createFulltextIndex(data, path){
-    let components = getPath(path)
-    if(_.last(components).endsWith('[]')) throw new Error("No!")
-    let attributeName = _.last(components)
-    let attrId = 0
-    let currentEl;
-    let indexValues = []
+    let paths = path.split('.')
+
+    let allTerms = getAllterms(data, paths)
+    let attributeName = _.last(paths)
 
     let valIds = []
     let mainIds = []
-
-    for(let entry of data){
+    let subObjIds = []
+    let subObjId = 0
+    let mainId = -1
+    let currentEl
+    data.forEach(entry => {
         currentEl = entry
-        let mainId = entry.ent_seq
-        for(let comp of components){
-            if (comp.endsWith('[]')) {
-                comp = comp.substring(0, comp.length - 2);
-                currentEl = currentEl[comp]
-                let subarr = entry[comp]
-                for(let subarrEl of subarr){
-                    
-                }
+        // let mainId = entry.ent_seq
+        mainId++
+        for (let i = 0; i < paths.length; i++) {
+            let comp = paths[i]
+            if (currentEl[comp] === undefined) break
+            currentEl = currentEl[comp]
 
+            if(_.isArray(currentEl)){
+                comp = paths[++i] // move to next level
+                for(let subarrEl of currentEl){
+                    if (subarrEl[comp] === undefined) continue
+                    subObjId++
+
+                    if (_.last(paths) == comp){
+                        let valId = getValueID(allTerms, subarrEl[comp])
+                        valIds.push(valId)
+                        mainIds.push(mainId)
+                        subObjIds.push(subObjId)
+
+                        // console.log(valId + " " + mainId + " " + subObjId);
+                    }else{
+                        throw new Error('level 3 not supported')
+                    }
+                }
             }else{
                 currentEl = currentEl[comp]
-                if (_.last(components) == comp){
+                if (_.last(paths) == comp){
                     let valId = getValueID(data, currentEl)
                     valIds.push(valId)
-                    mainIds.push(mainIds)
+                    mainIds.push(mainId)
                 }
             }
 
         }
 
-    }
+    })
+
+    fs.writeFileSync(path+'.mainIds', new Buffer(new Uint32Array(mainIds).buffer))
+    fs.writeFileSync(path+'.subObjIds', new Buffer(new Uint32Array(subObjIds).buffer))
+    fs.writeFileSync(path, JSON.stringify(allTerms))
+
 }
 
 function createBoostIndex(data, path){
@@ -149,11 +144,10 @@ function createBoostIndex(data, path){
 
 
 
-createFulltextIndex(data, "kanji[].text")
-
-createBoostIndex(data, "kanji[].commonness")
-
-
+var service = {}
+service.createFulltextIndex = createFulltextIndex
+service.createBoostIndex = createBoostIndex
+module.exports = service
 
 // console.time("S_allTerms")
 // var asdf = require("./split/S.json")
@@ -233,17 +227,6 @@ createBoostIndex(data, "kanji[].commonness")
 // allTerms.sort()
 
 
-// function binarySearch(arr, find) {
-//   var low = 0, high = arr.length - 1,i;
-//   while (low <= high) {
-//     i = Math.floor((low + high) / 2);
-//     // comparison = comparator(arr[i], find);
-//     if (arr[i] < find) { low = i + 1; continue; };
-//     if (arr[i] > find) { high = i - 1; continue; };
-//     return i;
-//   }
-//   return null;
-// };
 
 // // let test = ["a", "bb", "cc", "de", "fff"]
 // // let hmm = binarySearch(test, "fff")
