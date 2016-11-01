@@ -1,34 +1,34 @@
 'use strict'
-let _ = require("lodash");
+let _ = require('lodash')
 
 
 var example_schema = {
-    "pos": true,
-    "misc": true,
-    "kanji": [
+    'pos': true,
+    'misc': true,
+    'kanji': [
         {
-            "text": true,
-            "commonness": true,
-            "num_occurences": true,
-            "readings": true
+            'text': true,
+            'commonness': true,
+            'num_occurences': true,
+            'readings': true
         }
     ],
-    "kana": [
+    'kana': [
         {
-            "text": true,
-            "romaji": true,
-            "commonness": true,
-            "num_occurences": true
+            'text': true,
+            'romaji': true,
+            'commonness': true,
+            'num_occurences': true
         }
     ],
-    "meanings": [
+    'meanings': [
         {
-            "text": true,
-            "lang": true
+            'text': true,
+            'lang': true
         }
     ],
-    "ent_seq": true
-};
+    'ent_seq': true
+}
 
 
 function filterWithSchema(arr, schema){

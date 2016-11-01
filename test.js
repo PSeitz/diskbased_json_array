@@ -1,36 +1,36 @@
 'use strict'
-
-let jsonfilter = require('./jsonfilter')
+console.time('thesearch')
+// let jsonfilter = require('./jsonfilter')
 let randomaccess = require('./randomaccess')
-let _ = require("lodash");
+// let _ = require("lodash");
 
 var schema = {
-    "pos": true,
-    "misc": true,
-    "kanji": [
+    'pos': true,
+    'misc': true,
+    'kanji': [
         {
-            "text": true,
-            "commonness": true,
-            "num_occurences": true,
-            "readings": true
+            'text': true,
+            'commonness': true,
+            'num_occurences': true,
+            'readings': true
         }
     ],
-    "kana": [
+    'kana': [
         {
-            "text": true,
-            "romaji": true,
-            "commonness": true,
-            "num_occurences": true
+            'text': true,
+            'romaji': true,
+            'commonness': true,
+            'num_occurences': true
         }
     ],
-    "meanings": [
+    'meanings': [
         {
-            "text": true,
-            "lang": true
+            'text': true,
+            'lang': true
         }
     ],
-    "ent_seq": true
-};
+    'ent_seq': true
+}
 
 
 // console.time("jmdict.json")
@@ -66,26 +66,60 @@ var schema = {
 //     // console.log(data);
 // })
 
+function create(cb){
 
-let data = require('./jmdict.json')
+    let data = require('./jmdict.json')
 
-// randomaccess.writeArray('jmdict.data', data)
-let searchindex = require('./searchindex')
-let createindex = require('./createindex')
+    randomaccess.writeArray('jmdict.data', data)
+    
+    let createindex = require('./createindex')
+
+    createindex.createFulltextIndex(data, 'kanji.text', null, cb)
+    createindex.createFulltextIndex(data, 'kana.romaji')
+    createindex.createFulltextIndex(data, 'kana.text')
+    createindex.createFulltextIndex(data, 'meanings.text', {tokenize:true})
+    createindex.createBoostIndex(data, 'kanji.commonness', {type:'int'})
+}
+
+function search(){
+    
+    let searchindex = require('./searchindex')
+
+    let request = {
+        search: {
+            term:'我慢',
+            attr:'kanji.text'
+        },
+        boost: {
+            attr:'kanji.commonness',
+            fun:'log'
+        }
+    }
+    
+    // let mainsIds = searchindex.search('meanings.text', 'ohne Missgeschick', , {exact:true, levenshtein_distance:2})
+    searchindex.search('kanji.text', '我慢', {exact:true, levenshtein_distance:0}, (mainsIds) => {
+        
+        console.log(mainsIds)
+        
+        let loader = new randomaccess.Loader('jmdict.data')
+        
+        loader.getDocs(mainsIds).then(data => {
+            console.timeEnd('thesearch')
+            console.log(JSON.stringify(data.map(entry => entry.kanji), null, 2))
+        })
+    })
+
+}
+// create(() => {
+//     search()    
+// })
+
+search()  
+// let parentValId = require('fs').readFileSync('meanings.text.tokens.parentValId')
+// let parentIds = new Uint32Array(parentValId.buffer, parentValId.offset, parentValId.buffer.length)
 
 
-createindex.createFulltextIndex(data, 'kanji.text')
-createindex.createBoostIndex(data, 'kanji.commonness')
-
-let searchTerm = '意慾'
-let mainsIds = searchindex.search('kanji.text', searchTerm, 0)
-console.log(mainsIds)
-
-let loader = new randomaccess.Loader('jmdict.data')
-loader.getDocs(mainsIds).then(data => {
-    console.log(JSON.stringify(data.map(entry => entry.kanji), null, 2))
-})
-
+// console.log(parentIds.length)
 
 // let loader = new randomaccess.Loader('jmdict.data')
 // loader.getDocs([69724]).then(data => {
@@ -93,9 +127,15 @@ loader.getDocs(mainsIds).then(data => {
 // })
 
 
+// var fs = require('fs')
+// var charOffsets = JSON.parse(fs.readFileSync('./kanji.text.charOffsets'))
+// const readline = require('readline');
+// let stream = fs.createReadStream('kanji.text', {start: charOffsets['意'].start, end:charOffsets['意'].end})
+// const rl = readline.createInterface({
+//     input: stream
+// });
 
-
-
-
-
-
+// rl.on('line', (line) => {
+//     console.log(line)
+// }).on('close', () => {
+// });

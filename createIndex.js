@@ -56,21 +56,22 @@ function getValueID(data, value){
     return binarySearch(data, value)
 }
 
-function getAllterms(arr, path, existingTerms){
+function normalizeText(text){
+    text = text.replace(/ *\([^)]*\) */g, ' ') // remove everything in braces
+    text = text.replace(/[{}'"]/g, '') // remove ' " {}
+    text = text.replace(/\s\s+/g, ' ') // replace tabs, newlines, double spaces with single spaces
+    // text = text.replace(/\r?\n|\r/g, " "); // replace line breaks with spaces
+    return text.trim()
+}
+
+function getAllterms(data, path, options, existingTerms){
+    options = options || {}
     let terms = existingTerms || {}
-    arr.forEach(entry => {
-        let current = entry
-        for (let i = 0; i < path.length; i++) {
-            let comp = path[i]
-            if (current[comp] === undefined) break
-            current = current[comp]
-            if(current && _.isArray(current)){
-                getAllterms(current, path.slice(i+1), terms)
-                // terms = terms.concat()
-            }else if (_.last(path) == comp){
-                terms[current] = true
-            }
-        }
+
+    forEachPath(data, path, (value) => {
+        let normalizedText = normalizeText(value)
+        terms[normalizedText] = true
+        if (options.tokenize) normalizedText.split(' ').forEach(part => terms[part] = true)
     })
     if (!existingTerms) return Object.keys(terms).sort() //Level 0
     return terms
@@ -80,19 +81,11 @@ function getAllterms(arr, path, existingTerms){
 // console.log(terms[1000]);
 
 
-
-function createFulltextIndex(data, path){
+function forEachPath(data, path, cb) {
     let paths = path.split('.')
-
-    let allTerms = getAllterms(data, paths)
-    let attributeName = _.last(paths)
-
-    let valIds = []
-    let mainIds = []
-    let subObjIds = []
     let subObjId = 0
     let currentEl
-    for (let mainId = 0; mainId < data.length; mainId++) {
+    for (let mainId = 0; mainId < data.length; mainId++) {  
         let entry = data[mainId]
         currentEl = entry
         // let mainId = entry.ent_seq
@@ -108,19 +101,7 @@ function createFulltextIndex(data, path){
                     subObjId++
 
                     if (_.last(paths) == comp){
-                        let valId = getValueID(allTerms, subarrEl[comp])
-                        valIds.push(valId)
-                        mainIds.push(mainId)
-                        subObjIds.push(subObjId)
-
-                        if (valId == 72473) {
-                            console.log("Creating ValueId " + valId)
-                            console.log(subarrEl[comp])
-                            console.log("mainId "+mainId)
-                            console.log(entry.ent_seq)
-                        }
-
-                        // console.log(valId + " " + mainId + " " + subObjId);
+                        cb(subarrEl[comp], mainId, subObjId)
                     }else{
                         throw new Error('level 3 not supported')
                     }
@@ -128,26 +109,106 @@ function createFulltextIndex(data, path){
             }else{
                 currentEl = currentEl[comp]
                 if (_.last(paths) == comp){
-                    let valId = getValueID(data, currentEl)
-                    valIds.push(valId)
-                    mainIds.push(mainId)
+                    cb(currentEl, mainId)
                 }
             }
 
         }
 
     }
+}
 
-    fs.writeFileSync(path+'.mainIds', new Buffer(new Uint32Array(mainIds).buffer))
-    fs.writeFileSync(path+'.subObjIds', new Buffer(new Uint32Array(subObjIds).buffer))
-    fs.writeFileSync(path, JSON.stringify(allTerms))
+
+function createFulltextIndex(data, path, options, cb){
+    options = options || {}
+    let allTerms = getAllterms(data, path, options)
+
+    let tuples = []
+    let tokens = []
+
+    forEachPath(data, path, (value, mainId, subObjId) => {
+        let normalizedText = normalizeText(value)
+        let valId = getValueID(allTerms, normalizedText)
+        if (subObjId) tuples.push([valId, mainId, subObjId])
+        else tuples.push([valId, mainId])
+        if (options.tokenize && normalizedText.split(' ').length > 1) normalizedText.split(' ').forEach(part => tokens.push([getValueID(allTerms, part), mainId, subObjId, valId]))
+    })
+
+    tuples.sort(sortFunction)
+    tokens.sort(sortFunction)
+
+    function sortFunction(a, b) {
+        if (a[0] === b[0]) {
+            return 0
+        }
+        else {
+            return (a[0] < b[0]) ? -1 : 1
+        }
+    }
+    fs.writeFileSync(path+'.valIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
+    fs.writeFileSync(path+'.mainIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
+    fs.writeFileSync(path+'.subObjIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[2])).buffer))
+
+    if (tokens.length > 0) {
+        fs.writeFileSync(path+'.tokens.valIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[0])).buffer))
+        fs.writeFileSync(path+'.tokens.mainIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[1])).buffer))
+        fs.writeFileSync(path+'.tokens.subObjIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[2])).buffer))
+        fs.writeFileSync(path+'.tokens.parentValId', new Buffer(new Uint32Array(tokens.map(tuple => tuple[3])).buffer))
+    }
+
+    // fs.writeFileSync(path, new Buffer(JSON.stringify(allTerms)))
+    fs.writeFileSync(path, allTerms.join('\n'))
+
+    creatCharOffsets(path, cb)
 
 }
 
-function createBoostIndex(data, path){
+function creatCharOffsets(path, cb){
 
+    const readline = require('readline')
+    let stream = fs.createReadStream(path)
+    const rl = readline.createInterface({ input: stream })
+
+    let offsetsOnly = [], charsOnly = [], lineOffset = []
+
+    let byteOffset = 0, lineNum = 0, currentChar
+    rl.on('line', (line) => {
+        let firstCharOfLine = line.charAt(0)
+        if(currentChar != firstCharOfLine){
+            currentChar = firstCharOfLine
+            charsOnly.push(currentChar)
+            offsetsOnly.push(byteOffset)
+            lineOffset.push(lineNum)
+        }
+        byteOffset+= Buffer.byteLength(line, 'utf8') + 1 // linebreak = 1
+        lineNum++
+    }).on('close', () => {
+        offsetsOnly.push(byteOffset)
+        fs.writeFileSync(path+'.charOffsets.chars', JSON.stringify(charsOnly))
+        fs.writeFileSync(path+'.charOffsets.byteOffsets',  new Buffer(new Uint32Array(offsetsOnly).buffer))
+        fs.writeFileSync(path+'.charOffsets.lineOffset',  new Buffer(new Uint32Array(lineOffset).buffer))
+        if (cb) cb()
+    })
 }
 
+
+
+function createBoostIndex(data, path, options, cb){
+    options = options || {}
+
+    let tuples = []
+    forEachPath(data, path, (value, mainId, subObjId) => {
+        if (options.type == 'int') {
+            tuples.push([value, mainId, subObjId])
+        }else{
+            throw new Error('not implemented')
+        }
+    })
+
+    fs.writeFileSync(path+'.boost.value', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
+    fs.writeFileSync(path+'.boost.mainIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
+    fs.writeFileSync(path+'.boost.subObjId', new Buffer(new Uint32Array(tuples.map(tuple => tuple[2])).buffer))
+}
 
 
 var service = {}

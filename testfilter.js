@@ -1,33 +1,33 @@
 'use strict'
-var chai = require('chai');
-var chaiAsPromised = require("chai-as-promised");
-chai.use(chaiAsPromised);
-var expect = require('chai').expect;
+var chai = require('chai')
+var chaiAsPromised = require('chai-as-promised')
+chai.use(chaiAsPromised)
+var expect = require('chai').expect
 
-var jsonfilter = require("./jsonfilter.js");
+var jsonfilter = require('./jsonfilter.js')
 
 
 describe('JSONFilter', function() {
 
     var example_schema = {
-        "misc": true,
-        "kanji": [
+        'misc': true,
+        'kanji': [
             {
-                "text": true,
+                'text': true,
             }
         ]
-    };
+    }
 
     it('should filter liek a pro', function() {
 
         let testObj = [
             {
-                "misc": {'yeas':'dacontent'},
-                "filterthis": 'ok',
-                "kanji": [
+                'misc': {'yeas':'dacontent'},
+                'filterthis': 'ok',
+                'kanji': [
                     {
-                        "text": 'mytext',
-                        "filterthisalso": 'ok'
+                        'text': 'mytext',
+                        'filterthisalso': 'ok'
                     }
                 ]
             }
@@ -37,15 +37,15 @@ describe('JSONFilter', function() {
 
         expect(filtered).to.deep.equal([
             {
-                "misc": {'yeas':'dacontent'},
-                "kanji": [
+                'misc': {'yeas':'dacontent'},
+                'kanji': [
                     {
-                        "text": 'mytext'
+                        'text': 'mytext'
                     }
                 ]
             }
-        ]);
+        ])
 
-    });
+    })
 
-});
+})
