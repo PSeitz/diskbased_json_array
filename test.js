@@ -74,11 +74,11 @@ function create(cb){
     
     let createindex = require('./createindex')
 
-    createindex.createFulltextIndex(data, 'kanji.text', null, cb)
-    createindex.createFulltextIndex(data, 'kana.romaji')
-    createindex.createFulltextIndex(data, 'kana.text')
-    createindex.createFulltextIndex(data, 'meanings.text', {tokenize:true})
-    createindex.createBoostIndex(data, 'kanji.commonness', {type:'int'})
+    createindex.createFulltextIndex(data, 'kanji[].text', null, cb)
+    createindex.createFulltextIndex(data, 'kana[].romaji')
+    createindex.createFulltextIndex(data, 'kana[].text')
+    createindex.createFulltextIndex(data, 'meanings[].text', {tokenize:true})
+    createindex.createBoostIndex(data, 'kanji[].commonness', {type:'int'})
 }
 
 function search(){
@@ -88,7 +88,8 @@ function search(){
     let request = {
         search: {
             term:'我慢',
-            attr:'kanji.text'
+            attr:'kanji.text',
+            firstCharExactMatch:true
         },
         boost: {
             attr:'kanji.commonness',
@@ -97,7 +98,7 @@ function search(){
     }
     
     // let mainsIds = searchindex.search('meanings.text', 'ohne Missgeschick', , {exact:true, levenshtein_distance:2})
-    searchindex.search('kanji.text', '我慢', {exact:true, levenshtein_distance:0}, (mainsIds) => {
+    searchindex.search('kanji[].text', '我慢', {exact:true, levenshtein_distance:0}, (mainsIds) => {
         
         console.log(mainsIds)
         
@@ -110,11 +111,11 @@ function search(){
     })
 
 }
-// create(() => {
-//     search()    
-// })
+create(() => {
+    search()    
+})
 
-search()  
+// search()  
 // let parentValId = require('fs').readFileSync('meanings.text.tokens.parentValId')
 // let parentIds = new Uint32Array(parentValId.buffer, parentValId.offset, parentValId.buffer.length)
 

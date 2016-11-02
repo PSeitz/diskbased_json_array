@@ -60,7 +60,6 @@ function normalizeText(text){
     text = text.replace(/ *\([^)]*\) */g, ' ') // remove everything in braces
     text = text.replace(/[{}'"]/g, '') // remove ' " {}
     text = text.replace(/\s\s+/g, ' ') // replace tabs, newlines, double spaces with single spaces
-    // text = text.replace(/\r?\n|\r/g, " "); // replace line breaks with spaces
     return text.trim()
 }
 
@@ -120,6 +119,11 @@ function forEachPath(data, path, cb) {
 
 
 function createFulltextIndex(data, path, options, cb){
+    let origPath = path
+    path = path.split('.')
+        .map(el => (el.endsWith('[]')? el.substr(0, el.length-2):el ))
+        .join('.')
+
     options = options || {}
     let allTerms = getAllterms(data, path, options)
 
@@ -147,7 +151,10 @@ function createFulltextIndex(data, path, options, cb){
     }
     fs.writeFileSync(path+'.valIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
     fs.writeFileSync(path+'.mainIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
-    fs.writeFileSync(path+'.subObjIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[2])).buffer))
+
+    let pathToRoot = []
+    let subObjIds = tuples.map(tuple => tuple[2])
+    fs.writeFileSync(path+'.subObjIds', new Buffer(new Uint32Array(subObjIds).buffer))
 
     if (tokens.length > 0) {
         fs.writeFileSync(path+'.tokens.valIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[0])).buffer))
@@ -215,121 +222,3 @@ var service = {}
 service.createFulltextIndex = createFulltextIndex
 service.createBoostIndex = createBoostIndex
 module.exports = service
-
-// console.time("S_allTerms")
-// var asdf = require("./split/S.json")
-
-
-// var levenshtein = require('fast-levenshtein');
-// let searchTerm = 'Salate'
-// let results = []
-// for(let term of asdf){
-//     if(levenshtein.get('scoring', term) <=  1)
-//         results.push(term)
-// }
-
-// console.timeEnd("S_allTerms")
-
-// console.log(results)
-
-// process.exit(0)
-
-
-// console.time("allTerms")
-// var data2 = fs.readFileSync("allTerms.str", 'utf8').split("\n")
-// console.timeEnd("allTerms")
-
-// console.time("allTerms.json")
-// var data3 = require("./allTerms.json")
-// console.timeEnd("allTerms.json")
-
-// // let offsetByChar = {}
-// // let offset = 0
-// // let groupbyStart = _.groupBy(data3, term => term[0])
-// // for(let char in groupbyStart){
-// //  if (char.length == 1 && ['*', ':', '?'].indexOf(char) >= 0) continue
-// //  fs.writeFileSync("split/"+char+".json",JSON.stringify(groupbyStart[char]), 'utf8');
-// //  offsetByChar[char] = offset
-// //  offset += groupbyStart[char].length
-// // }
-
-// // fs.writeFileSync("split/offsets.json",JSON.stringify(offsetByChar, null, 2), 'utf8');
-
-
-
-// function normalizeText(text){
-//     text = text.replace(/ *\([^)]*\) */g, " ");
-//     text = text.replace(/[{}'"]/g, "");
-//     return text
-// }
-
-// // console.log(data)
-
-// let allTerms = []
-
-
-// function add(term){
-//     allTerms[term] = true
-// }
-// function getTexts(entry, path){
-//     let texts = []
-//     for(let key in entry[path]){
-//         let text = entry[path][key].text
-//         text = text.replace(/ *\([^)]*\) */g, " ");
-//         text = text.replace(/[{}'"]/g, "");
-//         texts.push(text.trim())
-//     }
-//     return texts
-// }
-
-// for(let key in data){
-//     let entry = data[key]
-//     getTexts(entry, "meanings").forEach(text => text.split(' ').forEach(part => add(text)))
-//     getTexts(entry, "meanings").forEach(text => add(text))
-//     getTexts(entry, "kana").forEach(text => add(text))
-//     getTexts(entry, "kanji").forEach(text => add(text))
-// }
-
-// allTerms = Object.keys(allTerms)
-// allTerms.sort()
-
-
-
-// // let test = ["a", "bb", "cc", "de", "fff"]
-// // let hmm = binarySearch(test, "fff")
-// // console.log(hmm)
-
-// let buff1 = [];
-// let buff2 = [];
-
-// // let termidToEntSeq = {}
-// for(let key in data){
-//     let entry = data[key]
-//     function addToMap(text){
-//         // let pos = allTerms.indexOf(text)
-//         let pos = binarySearch(allTerms, text)
-//         if (text == 'constructor') { return}
-//         // termidToEntSeq[pos] = termidToEntSeq[pos] || []
-//         // termidToEntSeq[pos].push(entry.ent_seq)
-
-//         buff1.push(pos)
-//         buff2.push(entry.ent_seq)
-//     }
-//     getTexts(entry, "meanings").forEach(text => text.split(' ').forEach(part => addToMap(text)))
-//     getTexts(entry, "meanings").forEach(text => addToMap(text))
-//     getTexts(entry, "kana").forEach(text => addToMap(text))
-//     getTexts(entry, "kanji").forEach(text => addToMap(text))
-// }
-
-
-// fs.writeFileSync("allTerms.json",JSON.stringify(allTerms), 'utf8');
-// fs.writeFileSync("allTerms.str",allTerms.join("\n"), 'utf8');
-// // fs.writeFileSync("allTermMappings.json", JSON.stringify(termidToEntSeq, null, 2), 'utf8');
-
-
-
-
-// fs.writeFileSync("buff1", new Buffer(new Uint16Array(buff1)))
-// fs.writeFileSync("buff2", new Buffer(new Uint16Array(buff2)))
-
-// console.log("finished")

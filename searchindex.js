@@ -1,10 +1,10 @@
 'use strict'
-var fs = require('fs')
-// var _ = require('lodash')
-var levenshtein = require('fast-levenshtein')
+let fs = require('fs')
+// let _ = require('lodash')
+let levenshtein = require('fast-levenshtein')
 
 function binarySearchAll(arr, find) {
-    var low = 0, high = arr.length - 1,i
+    let low = 0, high = arr.length - 1,i
     while (low <= high) {
         i = Math.floor((low + high) / 2)
         // comparison = comparator(arr[i], find);
@@ -26,7 +26,7 @@ function binarySearchAll(arr, find) {
 }
 
 function binarySearch(arr, find) {
-    var low = 0, high = arr.length - 1,i
+    let low = 0, high = arr.length - 1,i
     while (low <= high) {
         i = Math.floor((low + high) / 2)
     // comparison = comparator(arr[i], find);
@@ -38,16 +38,24 @@ function binarySearch(arr, find) {
 }
 
 function search(field, term, options, cb){
+    let origPath = field
+    field = field.split('.')
+        .map(el => (el.endsWith('[]')? el.substr(0, el.length-2):el ))
+        .join('.')
 
-    var chars = JSON.parse(fs.readFileSync('./'+field+'.charOffsets.chars'))
-    let offsets = require('./loadUint32')('./'+field+'.charOffsets.byteOffsets')
-    let lineOffsets = require('./loadUint32')('./'+field+'.charOffsets.lineOffset')
-
-    let pos = binarySearch(chars, term.charAt(0)) 
+    let readWindow = undefined, windowOffset = undefined
+    if (options.exact || options.firstCharExactMatch || options.startsWith) {
+        let chars = JSON.parse(fs.readFileSync('./'+field+'.charOffsets.chars'))
+        let offsets = require('./loadUint32')('./'+field+'.charOffsets.byteOffsets')
+        let lineOffsets = require('./loadUint32')('./'+field+'.charOffsets.lineOffset')
+        let pos = binarySearch(chars, term.charAt(0)) 
+        readWindow = {start: offsets[pos], end:offsets[pos+1]}
+        windowOffset =  lineOffsets[pos]
+    }
 
     const readline = require('readline')
-    let stream = fs.createReadStream(field, {start: offsets[pos], end:offsets[pos+1]})
-    const rl = readline.createInterface({ input: stream })
+    let stream = fs.createReadStream(field, readWindow)
+    const rl = readline.createInterface({ input: stream})
 
     let checks = []
     if (options.exact) checks.push(line => line == term)
@@ -56,7 +64,7 @@ function search(field, term, options, cb){
     if (options.customCompare) checks.push(line => options.customCompare(line))
 
     let scores = []
-    let hits = [], index = lineOffsets[pos]
+    let hits = [], index = windowOffset
     rl.on('line', (line) => {
         if (checks.every(check => check(line))){
             hits.push(index)
