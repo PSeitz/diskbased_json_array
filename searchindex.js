@@ -37,6 +37,18 @@ function binarySearch(arr, find) {
     return null
 }
 
+
+class ParrallelKeyValueStore{
+    constructor(key, value){
+        this.keys = require('./loadUint32')(key)
+        this.values = require('./loadUint32')(value)
+    }
+    getValue(key){
+        let pos = binarySearch(this.keys, key)
+        return this.values[pos]
+    }
+}
+
 function search(field, term, options, cb){
     let origPath = field
     field = field.split('.')
@@ -72,17 +84,23 @@ function search(field, term, options, cb){
         }
         index++
     }).on('close', () => {
-        let subObjIds = require('./loadUint32')('./'+field+'.subObjIds')
-        let mainIds = require('./loadUint32')('./'+field+'.mainIds')
+        let subObjDocIds = require('./loadUint32')('./'+field+'.subObjIds')
+        // let mainDocIds = require('./loadUint32')('./'+field+'.mainIds')
         let valIds = require('./loadUint32')('./'+field+'.valIds')
 
-        let mainds = []
-        hits.forEach(hit => binarySearchAll(valIds, hit).map(validIndex => mainds.push(mainIds[validIndex-1])))
+        let valueIdDocids = []
+        hits.forEach(hit => valueIdDocids.push(binarySearchAll(valIds, hit))) // For each hit in the fulltextindex, find all rows in the materialized index
 
-        let subObjId = []
-        hits.forEach(hit => binarySearchAll(valIds, hit).map(validIndex => subObjId.push(subObjIds[validIndex-1])))
-        console.log(subObjId)
-        if(cb) cb(mainds, subObjId)
+        // let mainds = valueIdDocids.map(validIndex => mainDocIds[validIndex]) // For each hit in the materialized index, get the main ids
+        let subObjIdHits = valueIdDocids.map(validIndex => subObjDocIds[validIndex]) // For each hit in the materialized index, get the subobject ids 
+
+        let kvStore = new ParrallelKeyValueStore('./'+field+'.subObjToMain.subObjIds', './'+field+'.subObjToMain.mainIds')
+
+        let mainds = subObjIdHits.map(subObjId => kvStore.getValue(subObjId))
+
+        console.log(mainds)
+
+        if(cb) cb(mainds, subObjIdHits)
     })
 
 }

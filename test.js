@@ -100,7 +100,7 @@ function search(){
     // let mainsIds = searchindex.search('meanings.text', 'ohne Missgeschick', , {exact:true, levenshtein_distance:2})
     searchindex.search('kanji[].text', '我慢', {exact:true, levenshtein_distance:0}, (mainsIds) => {
         
-        console.log(mainsIds)
+        // console.log(mainsIds)
         
         let loader = new randomaccess.Loader('jmdict.data')
         
@@ -111,11 +111,11 @@ function search(){
     })
 
 }
-create(() => {
-    search()    
-})
+// create(() => {
+//     search()    
+// })
 
-// search()  
+search()  
 // let parentValId = require('fs').readFileSync('meanings.text.tokens.parentValId')
 // let parentIds = new Uint32Array(parentValId.buffer, parentValId.offset, parentValId.buffer.length)
 
