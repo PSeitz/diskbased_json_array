@@ -118,6 +118,13 @@ function forEachPath(data, path, cb) {
 }
 
 
+function sortFirstColumn(a, b) {
+    if (a[0] === b[0])
+        return 0
+    else
+        return (a[0] < b[0]) ? -1 : 1
+}
+
 function createFulltextIndex(data, path, options, cb){
     let origPath = path
     path = path.split('.')
@@ -127,7 +134,6 @@ function createFulltextIndex(data, path, options, cb){
     options = options || {}
     let allTerms = getAllterms(data, path, options)
 
-    let subObjToMain = []
 
     let tuples = []
     let tokens = []
@@ -137,29 +143,15 @@ function createFulltextIndex(data, path, options, cb){
         let valId = getValueID(allTerms, normalizedText)
         if (subObjId) {
             tuples.push([valId, mainId, subObjId])
-            subObjToMain.push([subObjId, mainId])
         }
         else tuples.push([valId, mainId])
         if (options.tokenize && normalizedText.split(' ').length > 1) normalizedText.split(' ').forEach(part => tokens.push([getValueID(allTerms, part), mainId, subObjId, valId]))
     })
 
-    // if (subObjToMain.length >= 0) {
-    //     _.uniqBy(subObjToMain, el=> el[0])
-    //     fs.writeFileSync(path+'.valIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[0])).buffer))
-    //     fs.writeFileSync(path+'.mainIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[1])).buffer))
-    // }
-    
-    tuples.sort(sortFunction)
-    tokens.sort(sortFunction)
-    subObjToMain.sort(sortFunction)
+    tuples.sort(sortFirstColumn)
+    tokens.sort(sortFirstColumn)
+    let subObjToMain = tuples.map(el => [el[2], el[1]]).sort(sortFirstColumn)
     subObjToMain = _.uniqBy(subObjToMain, el => el[0])
-
-    function sortFunction(a, b) {
-        if (a[0] === b[0])
-            return 0
-        else
-            return (a[0] < b[0]) ? -1 : 1
-    }
 
     fs.writeFileSync(path+'.subObjToMain.subObjIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[0])).buffer))
     fs.writeFileSync(path+'.subObjToMain.mainIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[1])).buffer))
@@ -225,15 +217,16 @@ function createBoostIndex(data, path, options, cb){
     let tuples = []
     forEachPath(data, path, (value, mainId, subObjId) => {
         if (options.type == 'int') {
-            tuples.push([value, mainId, subObjId])
+            tuples.push([subObjId, value])
         }else{
             throw new Error('not implemented')
         }
     })
 
-    fs.writeFileSync(path+'.boost.value', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
-    fs.writeFileSync(path+'.boost.mainIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
-    fs.writeFileSync(path+'.boost.subObjId', new Buffer(new Uint32Array(tuples.map(tuple => tuple[2])).buffer))
+    tuples.sort(sortFirstColumn)
+
+    fs.writeFileSync(path+'.boost.subObjId', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
+    fs.writeFileSync(path+'.boost.value', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
 }
 
 

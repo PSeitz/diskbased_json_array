@@ -87,24 +87,30 @@ function search(){
 
     let request = {
         search: {
-            term:'我慢',
-            attr:'kanji.text',
+            term:'我慢汁',
+            path:'kanji[].text',
+            levenshtein_distance:1,
             firstCharExactMatch:true
         },
         boost: {
-            attr:'kanji.commonness',
-            fun:'log'
+            path:'kanji[].commonness',
+            fun: Math.log1p,
+            param: +1
         }
     }
+    // わが輩
     
     // let mainsIds = searchindex.search('meanings.text', 'ohne Missgeschick', , {exact:true, levenshtein_distance:2})
-    searchindex.search('kanji[].text', '我慢', {exact:true, levenshtein_distance:0}, (mainsIds) => {
+    searchindex.search(request, (mainWithScore) => {
         
         // console.log(mainsIds)
-        
         let loader = new randomaccess.Loader('jmdict.data')
         
-        loader.getDocs(mainsIds).then(data => {
+        loader.getDocs(mainWithScore.map(el => el.id)).then(data => {
+            // console.log('numResults '+data.length)
+            // console.log(data.some(entry => {
+            //     return entry.kanji && entry.kanji[0] && entry.kanji[0].commonness >0
+            // }))
             console.timeEnd('thesearch')
             console.log(JSON.stringify(data.map(entry => entry.kanji), null, 2))
         })
@@ -116,6 +122,7 @@ function search(){
 // })
 
 search()  
+
 // let parentValId = require('fs').readFileSync('meanings.text.tokens.parentValId')
 // let parentIds = new Uint32Array(parentValId.buffer, parentValId.offset, parentValId.buffer.length)
 
