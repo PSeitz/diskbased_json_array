@@ -1,6 +1,6 @@
 'use strict'
 console.time('thesearch')
-// let jsonfilter = require('./jsonfilter')
+let jsonfilter = require('./jsonfilter')
 let randomaccess = require('./randomaccess')
 // let _ = require("lodash");
 
@@ -10,25 +10,25 @@ var schema = {
     'kanji': [
         {
             'text': true,
-            'commonness': true,
-            'num_occurences': true,
-            'readings': true
+            'commonness': true
+            // 'num_occurences': true,
+            // 'readings': true
         }
     ],
     'kana': [
         {
             'text': true,
             'romaji': true,
-            'commonness': true,
-            'num_occurences': true
+            'commonness': true
+            // 'num_occurences': true
         }
     ],
-    'meanings': [
-        {
-            'text': true,
-            'lang': true
-        }
-    ],
+    'meanings':
+    {
+        'eng': true,
+        'ger': true
+    }
+    ,
     'ent_seq': true
 }
 
@@ -66,20 +66,42 @@ var schema = {
 //     // console.log(data);
 // })
 
-function create(cb){
+function create(){
 
     let data = require('./jmdict.json')
+    let data2 = jsonfilter.filterWithSchema(data, schema)
 
-    randomaccess.writeArray('jmdict.data', data)
+
+    return createDatabase(data2, 'jmdict')
+
+    // randomaccess.writeArray('jmdict.data', data2)
     
+    // let createindex = require('./createindex')
+
+    // return Promise.all([createindex.createFulltextIndex(data, 'kanji[].text', null),
+    //     createindex.createFulltextIndex(data, 'kana[].romaji'),
+    //     createindex.createFulltextIndex(data, 'kana[].text'),
+    //     createindex.createFulltextIndex(data, 'meanings.ger[]', {tokenize:true}),
+    //     createindex.createFulltextIndex(data, 'meanings.eng[]', {tokenize:true}),
+    //     createindex.createBoostIndex(data, 'kanji[].commonness', {type:'int'}),
+    //     createindex.createBoostIndex(data, 'kana[].commonness', {type:'int'})])
+}
+
+function createDatabase(data, name){
+
+    randomaccess.writeArray(name+'/data', data)
     let createindex = require('./createindex')
 
-    createindex.createFulltextIndex(data, 'kanji[].text', null, cb)
-    createindex.createFulltextIndex(data, 'kana[].romaji')
-    createindex.createFulltextIndex(data, 'kana[].text')
-    createindex.createFulltextIndex(data, 'meanings[].text', {tokenize:true})
-    createindex.createBoostIndex(data, 'kanji[].commonness', {type:'int'})
+    return Promise.all([createindex.createFulltextIndex(data, 'kanji[].text', null),
+        createindex.createFulltextIndex(data, 'kana[].romaji'),
+        createindex.createFulltextIndex(data, 'kana[].text'),
+        createindex.createFulltextIndex(data, 'meanings.ger[]', {tokenize:true}),
+        createindex.createFulltextIndex(data, 'meanings.eng[]', {tokenize:true}),
+        createindex.createBoostIndex(data, 'kanji[].commonness', {type:'int'}),
+        createindex.createBoostIndex(data, 'kana[].commonness', {type:'int'})])
 }
+
+
 
 function search(){
     
@@ -112,16 +134,16 @@ function search(){
             //     return entry.kanji && entry.kanji[0] && entry.kanji[0].commonness >0
             // }))
             console.timeEnd('thesearch')
-            console.log(JSON.stringify(data.map(entry => entry.kanji), null, 2))
+            console.log(JSON.stringify(data.map(entry => entry), null, 2))
         })
     })
 
 }
-// create(() => {
-//     search()    
-// })
 
-search()  
+create()
+.then(search)
+
+// search()  
 
 // let parentValId = require('fs').readFileSync('meanings.text.tokens.parentValId')
 // let parentIds = new Uint32Array(parentValId.buffer, parentValId.offset, parentValId.buffer.length)

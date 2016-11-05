@@ -38,6 +38,21 @@ function binarySearch(arr, find) {
 }
 
 
+
+class CharOffset{
+    constructor(path){
+        this.chars = JSON.parse(fs.readFileSync('./'+path+'.charOffsets.chars'))
+        this.byteOffsets = require('./loadUint32')('./'+path+'.charOffsets.byteOffsets')
+        this.lineOffsets = require('./loadUint32')('./'+path+'.charOffsets.lineOffset')
+    }
+    getOffsets(char){
+        let pos = binarySearch(this.chars, char) 
+        let byteOffset = {start: this.byteOffsets[pos], end:this.byteOffsets[pos+1]}
+        return {byteOffset: byteOffset, lineOffset: this.lineOffsets[pos]}
+    }
+}
+
+
 class ParrallelKeyValueStore{
     constructor(key, value){
         this.keys = typeof key ==='string' ? require('./loadUint32')(key) : key
@@ -75,18 +90,14 @@ function search(request, cb){
     let origPath = path
     path = removeArrayMarker(path)
     console.time('SearchTime Netto')
-    let readWindow = undefined, windowOffset = 0
+    let charOffset = {lineOffset:0}
     if (options.exact || options.firstCharExactMatch || options.startsWith) {
-        let chars = JSON.parse(fs.readFileSync('./'+path+'.charOffsets.chars'))
-        let offsets = require('./loadUint32')('./'+path+'.charOffsets.byteOffsets')
-        let lineOffsets = require('./loadUint32')('./'+path+'.charOffsets.lineOffset')
-        let pos = binarySearch(chars, term.charAt(0)) 
-        readWindow = {start: offsets[pos], end:offsets[pos+1]}
-        windowOffset =  lineOffsets[pos]
+        let charOffsets = new CharOffset(path)
+        charOffset = charOffsets.getOffsets(term.charAt(0)) 
     }
 
     const readline = require('readline')
-    let stream = fs.createReadStream(path, readWindow)
+    let stream = fs.createReadStream(path, charOffset.byteOffset)
     const rl = readline.createInterface({ input: stream})
 
     let checks = []
@@ -95,13 +106,13 @@ function search(request, cb){
     if (options.startsWith !== undefined) checks.push(line => line.startsWith(term))
     if (options.customCompare !== undefined) checks.push(line => options.customCompare(line))
 
-    
     let scores = []
-    let hits = [], index = windowOffset
+    let hits = [], index = charOffset.lineOffset
     rl.on('line', (line) => {
         if (checks.every(check => check(line))){
             hits.push(index)
-            scores.push(1/(levenshtein.get(line, term)+1))
+            if (options.customScore) scores.push(options.customScore(line, term))
+            else scores.push(1/(levenshtein.get(line, term)+1))
         }
         index++
     }).on('close', () => {

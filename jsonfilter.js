@@ -36,9 +36,9 @@ function filterWithSchema(arr, schema){
     return arr.map(entry => {
         let newEntry = {}
         for(let prop in schema){
-            if (schema[prop] === true && entry[prop]) {
+            if (schema[prop] === true && entry[prop] !== undefined) {
                 newEntry[prop] = entry[prop]
-            }else if(_.isArray(schema[prop]) && entry[prop]){
+            }else if(_.isArray(schema[prop]) && entry[prop] !== undefined){
                 let schemaEl = schema[prop][0]
 
                 newEntry[prop] = filterWithSchema(entry[prop], schemaEl)

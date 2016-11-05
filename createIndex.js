@@ -94,21 +94,27 @@ function forEachPath(data, path, cb) {
             currentEl = currentEl[comp]
 
             if(_.isArray(currentEl)){
-                comp = paths[++i] // move to next level
-                for(let subarrEl of currentEl){
-                    if (subarrEl[comp] === undefined) continue
-                    subObjId++
+                if (_.last(paths) == comp){
+                    currentEl.forEach(el => {
+                        subObjId++
+                        cb(el, mainId, subObjId)
+                    })
+                }else{
+                    comp = paths[++i] // move to next level
+                    for(let subarrEl of currentEl){
+                        if (subarrEl[comp] === undefined) continue
+                        subObjId++
 
-                    if (_.last(paths) == comp){
-                        cb(subarrEl[comp], mainId, subObjId)
-                    }else{
-                        throw new Error('level 3 not supported')
+                        if (_.last(paths) == comp){
+                            cb(subarrEl[comp], mainId, subObjId)
+                        }else{
+                            throw new Error('level 3 not supported')
+                        }
                     }
                 }
             }else{
-                currentEl = currentEl[comp]
                 if (_.last(paths) == comp){
-                    cb(currentEl, mainId)
+                    cb(currentEl, mainId, subObjId)
                 }
             }
 
@@ -125,58 +131,61 @@ function sortFirstColumn(a, b) {
         return (a[0] < b[0]) ? -1 : 1
 }
 
-function createFulltextIndex(data, path, options, cb){
-    let origPath = path
-    path = path.split('.')
-        .map(el => (el.endsWith('[]')? el.substr(0, el.length-2):el ))
-        .join('.')
+function createFulltextIndex(data, path, options){
+    // let subfolder = options.subfolder || ''
+    return new Promise((resolve, reject) => {
+        let origPath = path
+        path = path.split('.')
+            .map(el => (el.endsWith('[]')? el.substr(0, el.length-2):el ))
+            .join('.')
 
-    options = options || {}
-    let allTerms = getAllterms(data, path, options)
+        options = options || {}
+        let allTerms = getAllterms(data, path, options)
 
 
-    let tuples = []
-    let tokens = []
+        let tuples = []
+        let tokens = []
 
-    forEachPath(data, path, (value, mainId, subObjId) => {
-        let normalizedText = normalizeText(value)
-        let valId = getValueID(allTerms, normalizedText)
-        if (subObjId) {
-            tuples.push([valId, mainId, subObjId])
+        forEachPath(data, path, (value, mainId, subObjId) => {
+            let normalizedText = normalizeText(value)
+            let valId = getValueID(allTerms, normalizedText)
+            if (subObjId) {
+                tuples.push([valId, mainId, subObjId])
+            }
+            else tuples.push([valId, mainId])
+            if (options.tokenize && normalizedText.split(' ').length > 1) normalizedText.split(' ').forEach(part => tokens.push([getValueID(allTerms, part), mainId, subObjId, valId]))
+        })
+
+        tuples.sort(sortFirstColumn)
+        tokens.sort(sortFirstColumn)
+        let subObjToMain = tuples.map(el => [el[2], el[1]]).sort(sortFirstColumn)
+        subObjToMain = _.uniqBy(subObjToMain, el => el[0])
+
+        fs.writeFileSync(path+'.subObjToMain.subObjIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[0])).buffer))
+        fs.writeFileSync(path+'.subObjToMain.mainIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[1])).buffer))
+
+        fs.writeFileSync(path+'.valIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
+        fs.writeFileSync(path+'.mainIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
+
+        let subObjIds = tuples.map(tuple => tuple[2])
+        fs.writeFileSync(path+'.subObjIds', new Buffer(new Uint32Array(subObjIds).buffer))
+
+        if (tokens.length > 0) {
+            fs.writeFileSync(path+'.tokens.valIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[0])).buffer))
+            fs.writeFileSync(path+'.tokens.mainIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[1])).buffer))
+            fs.writeFileSync(path+'.tokens.subObjIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[2])).buffer))
+            fs.writeFileSync(path+'.tokens.parentValId', new Buffer(new Uint32Array(tokens.map(tuple => tuple[3])).buffer))
         }
-        else tuples.push([valId, mainId])
-        if (options.tokenize && normalizedText.split(' ').length > 1) normalizedText.split(' ').forEach(part => tokens.push([getValueID(allTerms, part), mainId, subObjId, valId]))
+
+        // fs.writeFileSync(path, new Buffer(JSON.stringify(allTerms)))
+        fs.writeFileSync(path, allTerms.join('\n'))
+
+        creatCharOffsets(path, resolve, reject)
     })
-
-    tuples.sort(sortFirstColumn)
-    tokens.sort(sortFirstColumn)
-    let subObjToMain = tuples.map(el => [el[2], el[1]]).sort(sortFirstColumn)
-    subObjToMain = _.uniqBy(subObjToMain, el => el[0])
-
-    fs.writeFileSync(path+'.subObjToMain.subObjIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[0])).buffer))
-    fs.writeFileSync(path+'.subObjToMain.mainIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[1])).buffer))
-
-    fs.writeFileSync(path+'.valIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
-    fs.writeFileSync(path+'.mainIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
-
-    let subObjIds = tuples.map(tuple => tuple[2])
-    fs.writeFileSync(path+'.subObjIds', new Buffer(new Uint32Array(subObjIds).buffer))
-
-    if (tokens.length > 0) {
-        fs.writeFileSync(path+'.tokens.valIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[0])).buffer))
-        fs.writeFileSync(path+'.tokens.mainIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[1])).buffer))
-        fs.writeFileSync(path+'.tokens.subObjIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[2])).buffer))
-        fs.writeFileSync(path+'.tokens.parentValId', new Buffer(new Uint32Array(tokens.map(tuple => tuple[3])).buffer))
-    }
-
-    // fs.writeFileSync(path, new Buffer(JSON.stringify(allTerms)))
-    fs.writeFileSync(path, allTerms.join('\n'))
-
-    creatCharOffsets(path, cb)
 
 }
 
-function creatCharOffsets(path, cb){
+function creatCharOffsets(path, resolve, reject){
 
     const readline = require('readline')
     let stream = fs.createReadStream(path)
@@ -200,7 +209,7 @@ function creatCharOffsets(path, cb){
         fs.writeFileSync(path+'.charOffsets.chars', JSON.stringify(charsOnly))
         fs.writeFileSync(path+'.charOffsets.byteOffsets',  new Buffer(new Uint32Array(offsetsOnly).buffer))
         fs.writeFileSync(path+'.charOffsets.lineOffset',  new Buffer(new Uint32Array(lineOffset).buffer))
-        if (cb) cb()
+        resolve()
     })
 }
 
