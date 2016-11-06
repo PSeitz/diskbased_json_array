@@ -3,43 +3,6 @@ var fs = require('fs')
 var _ = require('lodash')
 
 
-// console.time('jaaa')
-// var data = require('./jmdictmin.json')
-// console.timeEnd('jaaa')
-
-// console.time('kanji.text')
-// var kanjitext = require('./kanji.text')
-// console.timeEnd('kanji.text')
-
-
-var example_schema = {
-    'pos': true,
-    'misc': true,
-    'kanji': [
-        {
-            'text': true,
-            'commonness': true,
-            'num_occurences': true,
-            'readings': true
-        }
-    ],
-    'kana': [
-        {
-            'text': true,
-            'romaji': true,
-            'commonness': true,
-            'num_occurences': true
-        }
-    ],
-    'meanings': [
-        {
-            'text': true,
-            'lang': true
-        }
-    ],
-    'ent_seq': true
-}
-
 function binarySearch(arr, find) {
     var low = 0, high = arr.length - 1,i
     while (low <= high) {
@@ -70,7 +33,8 @@ function getAllterms(data, path, options, existingTerms){
     forEachPath(data, path, (value) => {
         let normalizedText = normalizeText(value)
         terms[normalizedText] = true
-        if (options.tokenize) normalizedText.split(' ').forEach(part => terms[part] = true)
+        if (options.tokenize) 
+            forEachToken(normalizedText, token =>  terms[token] = true)
     })
     if (!existingTerms) return Object.keys(terms).sort() //Level 0
     return terms
@@ -131,6 +95,27 @@ function sortFirstColumn(a, b) {
         return (a[0] < b[0]) ? -1 : 1
 }
 
+function writeFileSync(file, data){
+    fs.writeFileSync(file, data)
+}
+
+function forEachToken(str, cb){
+    const regex = /(\w*)/g
+    let m
+
+    while ((m = regex.exec(str)) !== null) {
+        // This is necessary to avoid infinite loops with zero-width matches
+        if (m.index === regex.lastIndex) {
+            regex.lastIndex++
+        }
+        
+        // The result can be accessed through the `m`-variable.
+        m.forEach((match) => {
+            if (match.length >= 2) cb(match)
+        })
+    }
+}
+
 function createFulltextIndex(data, path, options){
     // let subfolder = options.subfolder || ''
     return new Promise((resolve, reject) => {
@@ -153,7 +138,9 @@ function createFulltextIndex(data, path, options){
                 tuples.push([valId, mainId, subObjId])
             }
             else tuples.push([valId, mainId])
-            if (options.tokenize && normalizedText.split(' ').length > 1) normalizedText.split(' ').forEach(part => tokens.push([getValueID(allTerms, part), mainId, subObjId, valId]))
+            if (options.tokenize && normalizedText.split(' ').length > 1) 
+                forEachToken(normalizedText, token => tokens.push([getValueID(allTerms, token), mainId, subObjId, valId]))
+                // normalizedText.split(' ').forEach(token => tokens.push([getValueID(allTerms, token), mainId, subObjId, valId]))
         })
 
         tuples.sort(sortFirstColumn)
@@ -161,26 +148,28 @@ function createFulltextIndex(data, path, options){
         let subObjToMain = tuples.map(el => [el[2], el[1]]).sort(sortFirstColumn)
         subObjToMain = _.uniqBy(subObjToMain, el => el[0])
 
-        fs.writeFileSync(path+'.subObjToMain.subObjIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[0])).buffer))
-        fs.writeFileSync(path+'.subObjToMain.mainIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[1])).buffer))
+        writeFileSync(path+'.subObjToMain.subObjIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[0])).buffer))
+        writeFileSync(path+'.subObjToMain.mainIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[1])).buffer))
 
-        fs.writeFileSync(path+'.valIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
-        fs.writeFileSync(path+'.mainIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
+        writeFileSync(path+'.valIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
+        writeFileSync(path+'.mainIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
 
         let subObjIds = tuples.map(tuple => tuple[2])
-        fs.writeFileSync(path+'.subObjIds', new Buffer(new Uint32Array(subObjIds).buffer))
+        writeFileSync(path+'.subObjIds', new Buffer(new Uint32Array(subObjIds).buffer))
 
         if (tokens.length > 0) {
-            fs.writeFileSync(path+'.tokens.valIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[0])).buffer))
-            fs.writeFileSync(path+'.tokens.mainIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[1])).buffer))
-            fs.writeFileSync(path+'.tokens.subObjIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[2])).buffer))
-            fs.writeFileSync(path+'.tokens.parentValId', new Buffer(new Uint32Array(tokens.map(tuple => tuple[3])).buffer))
+            writeFileSync(path+'.tokens.valIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[0])).buffer))
+            writeFileSync(path+'.tokens.mainIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[1])).buffer))
+            writeFileSync(path+'.tokens.subObjIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[2])).buffer))
+            writeFileSync(path+'.tokens.parentValId', new Buffer(new Uint32Array(tokens.map(tuple => tuple[3])).buffer))
         }
-
-        // fs.writeFileSync(path, new Buffer(JSON.stringify(allTerms)))
-        fs.writeFileSync(path, allTerms.join('\n'))
+        // writeFileSync(path, new Buffer(JSON.stringify(allTerms)))
+        writeFileSync(path, allTerms.join('\n'))
 
         creatCharOffsets(path, resolve, reject)
+    })
+    .catch(err => {
+        throw new Error('Error while creating index: ' + path + ' : '+err.toString())
     })
 
 }
@@ -206,9 +195,9 @@ function creatCharOffsets(path, resolve, reject){
         lineNum++
     }).on('close', () => {
         offsetsOnly.push(byteOffset)
-        fs.writeFileSync(path+'.charOffsets.chars', JSON.stringify(charsOnly))
-        fs.writeFileSync(path+'.charOffsets.byteOffsets',  new Buffer(new Uint32Array(offsetsOnly).buffer))
-        fs.writeFileSync(path+'.charOffsets.lineOffset',  new Buffer(new Uint32Array(lineOffset).buffer))
+        writeFileSync(path+'.charOffsets.chars', JSON.stringify(charsOnly))
+        writeFileSync(path+'.charOffsets.byteOffsets',  new Buffer(new Uint32Array(offsetsOnly).buffer))
+        writeFileSync(path+'.charOffsets.lineOffset',  new Buffer(new Uint32Array(lineOffset).buffer))
         resolve()
     })
 }
@@ -216,6 +205,7 @@ function creatCharOffsets(path, resolve, reject){
 
 
 function createBoostIndex(data, path, options, cb){
+
     let origPath = path
     path = path.split('.')
         .map(el => (el.endsWith('[]')? el.substr(0, el.length-2):el ))
@@ -234,12 +224,27 @@ function createBoostIndex(data, path, options, cb){
 
     tuples.sort(sortFirstColumn)
 
-    fs.writeFileSync(path+'.boost.subObjId', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
-    fs.writeFileSync(path+'.boost.value', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
+    writeFileSync(path+'.boost.subObjId', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
+    writeFileSync(path+'.boost.value', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
+}
+
+function createIndices(data, indices){
+
+    return Promise.all(indices.map(index => {
+        if (index.fulltext) {
+            return createFulltextIndex(data, index.fulltext, index.options)
+        }else if(index.boost){
+            return createBoostIndex(data, index.boost, index.options)
+        }else{
+            throw new Error('Choose boost or fulltext')
+        }
+    }))
+
 }
 
 
 var service = {}
 service.createFulltextIndex = createFulltextIndex
 service.createBoostIndex = createBoostIndex
+service.createIndices = createIndices
 module.exports = service

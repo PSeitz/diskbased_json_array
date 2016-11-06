@@ -4,6 +4,8 @@ let jsonfilter = require('./jsonfilter')
 let randomaccess = require('./randomaccess')
 // let _ = require("lodash");
 
+let database = require('./database')
+
 var schema = {
     'pos': true,
     'misc': true,
@@ -66,13 +68,25 @@ var schema = {
 //     // console.log(data);
 // })
 
-function create(){
+function create(name){
 
-    let data = require('./jmdict.json')
-    let data2 = jsonfilter.filterWithSchema(data, schema)
+    return database.createDatabaseFromFile('jmdict.json', 'jmdict',  [
+        // { fulltext:'entseq' },
+        { fulltext:'kanji[].text' }, 
+        { fulltext:'kana[].romaji' }, 
+        // { fulltext:'kana[].text' }, 
+        // { fulltext:'kanji[].text' }, 
+        { fulltext:'meanings.ger[]', options:{tokenize:true} }, 
+        { fulltext:'meanings.eng[]', options:{tokenize:true} }, 
+        { boost:'kanji[].commonness' , options:{type:'int'}}, 
+        { boost:'kana[].commonness', options:{type:'int'} }
+    ], schema)
+    .catch(console.log)
 
+    // let data = require('./jmdict.json')
+    // let data2 = jsonfilter.filterWithSchema(data, schema)
 
-    return createDatabase(data2, 'jmdict')
+    // return createDatabase(data2, name)
 
     // randomaccess.writeArray('jmdict.data', data2)
     
@@ -87,24 +101,38 @@ function create(){
     //     createindex.createBoostIndex(data, 'kana[].commonness', {type:'int'})])
 }
 
-function createDatabase(data, name){
+// function createDatabase(data, dbfolder){
+//     randomaccess.writeArray(dbfolder+'/data', data)
+//     let createindex = require('./createindex')
+//     return createindex.createIndices(data, dbfolder, [
+//         { fulltext:'entseq' },
+//         { fulltext:'kanji[].text' }, 
+//         { fulltext:'kana[].romaji' }, 
+//         { fulltext:'kana[].text' }, 
+//         { fulltext:'kanji[].text' }, 
+//         { fulltext:'meanings.ger[]', options:{tokenize:true} }, 
+//         { fulltext:'meanings.eng[]', options:{tokenize:true} }, 
+//         { boost:'kanji[].commonness' , options:{type:'int'}}, 
+//         { boost:'kana[].commonness', options:{type:'int'} }
+//     ])
 
-    randomaccess.writeArray(name+'/data', data)
-    let createindex = require('./createindex')
-
-    return Promise.all([createindex.createFulltextIndex(data, 'kanji[].text', null),
-        createindex.createFulltextIndex(data, 'kana[].romaji'),
-        createindex.createFulltextIndex(data, 'kana[].text'),
-        createindex.createFulltextIndex(data, 'meanings.ger[]', {tokenize:true}),
-        createindex.createFulltextIndex(data, 'meanings.eng[]', {tokenize:true}),
-        createindex.createBoostIndex(data, 'kanji[].commonness', {type:'int'}),
-        createindex.createBoostIndex(data, 'kana[].commonness', {type:'int'})])
-}
 
 
 
-function search(){
-    
+//     // return Promise.all([createindex.createFulltextIndex(data, dbfolder, 'kanji[].text', null),
+//     //     createindex.createFulltextIndex(data, dbfolder, 'kana[].romaji'),
+//     //     createindex.createFulltextIndex(data, dbfolder, 'kana[].text'),
+//     //     createindex.createFulltextIndex(data, dbfolder, 'meanings.ger[]', {tokenize:true}),
+//     //     createindex.createFulltextIndex(data, dbfolder, 'meanings.eng[]', {tokenize:true}),
+//     //     createindex.createBoostIndex(data, dbfolder, 'kanji[].commonness', {type:'int'}),
+//     //     createindex.createBoostIndex(data, dbfolder, 'kana[].commonness', {type:'int'})])
+// }
+
+
+function search(dbfolder){
+
+    if (!process.cwd().endsWith(dbfolder))
+        process.chdir(process.cwd()+'/'+dbfolder)
     let searchindex = require('./searchindex')
 
     let request = {
@@ -123,10 +151,10 @@ function search(){
     // わが輩
     
     // let mainsIds = searchindex.search('meanings.text', 'ohne Missgeschick', , {exact:true, levenshtein_distance:2})
-    searchindex.search(request, (mainWithScore) => {
+    return searchindex.search(request, (mainWithScore) => {
         
         // console.log(mainsIds)
-        let loader = new randomaccess.Loader('jmdict.data')
+        let loader = new randomaccess.Loader('data')
         
         loader.getDocs(mainWithScore.map(el => el.id)).then(data => {
             // console.log('numResults '+data.length)
@@ -141,9 +169,11 @@ function search(){
 }
 
 create()
-.then(search)
+.then(() => {
+    search('jmdict')
+})
 
-// search()  
+// search('jmdict')  
 
 // let parentValId = require('fs').readFileSync('meanings.text.tokens.parentValId')
 // let parentIds = new Uint32Array(parentValId.buffer, parentValId.offset, parentValId.buffer.length)

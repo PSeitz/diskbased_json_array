@@ -31,22 +31,26 @@ var example_schema = {
 }
 
 
-function filterWithSchema(arr, schema){
+function filterWithSchemaObj(obj, schema){
 
-    return arr.map(entry => {
-        let newEntry = {}
-        for(let prop in schema){
-            if (schema[prop] === true && entry[prop] !== undefined) {
-                newEntry[prop] = entry[prop]
-            }else if(_.isArray(schema[prop]) && entry[prop] !== undefined){
-                let schemaEl = schema[prop][0]
-
-                newEntry[prop] = filterWithSchema(entry[prop], schemaEl)
-            }
+    let newEntry = {}
+    for(let prop in schema){
+        
+        if (schema[prop] === true && obj[prop] !== undefined) {
+            newEntry[prop] = obj[prop]
+        }else if(_.isArray(schema[prop]) && obj[prop] !== undefined){
+            let schemaEl = schema[prop][0]
+            newEntry[prop] = filterWithSchema(obj[prop], schemaEl)
+        }else if(schema[prop] && obj[prop] !== undefined){
+            newEntry[prop] = filterWithSchemaObj(obj[prop], schema[prop])
         }
-        return newEntry
-    })
+    }
+    return newEntry
 
+}
+
+function filterWithSchema(arr, schema){
+    return arr.map(entry => filterWithSchemaObj(entry, schema))
 }
 
 
