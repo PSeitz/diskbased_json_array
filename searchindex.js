@@ -37,13 +37,15 @@ function binarySearch(arr, find) {
     return null
 }
 
-
+function getIndex(path){
+    return require('./loadUint32')(path)
+}
 
 class CharOffset{
     constructor(path){
-        this.chars = JSON.parse(fs.readFileSync('./'+path+'.charOffsets.chars'))
-        this.byteOffsets = require('./loadUint32')('./'+path+'.charOffsets.byteOffsets')
-        this.lineOffsets = require('./loadUint32')('./'+path+'.charOffsets.lineOffset')
+        this.chars = JSON.parse(fs.readFileSync(path+'.charOffsets.chars'))
+        this.byteOffsets = getIndex(path+'.charOffsets.byteOffsets')
+        this.lineOffsets = getIndex(path+'.charOffsets.lineOffset')
     }
     getOffsets(char){
         let pos = binarySearch(this.chars, char) 
@@ -55,8 +57,8 @@ class CharOffset{
 
 class ParrallelKeyValueStore{
     constructor(key, value){
-        this.keys = typeof key ==='string' ? require('./loadUint32')(key) : key
-        this.values = typeof value ==='string' ? require('./loadUint32')(value) : value
+        this.keys = typeof key ==='string' ? getIndex(key) : key
+        this.values = typeof value ==='string' ? getIndex(value) : value
     }
     getValue(key){
         let pos = binarySearch(this.keys, key)
@@ -69,6 +71,8 @@ function removeArrayMarker(path){
         .map(el => (el.endsWith('[]')? el.substr(0, el.length-2):el ))
         .join('.')
 }
+
+
 
 function search(request, cb){
     let path = request.search.path
@@ -107,39 +111,45 @@ function search(request, cb){
     if (options.customCompare !== undefined) checks.push(line => options.customCompare(line))
 
     let scores = []
-    let hits = [], index = charOffset.lineOffset
+    let valueIdHits = [], index = charOffset.lineOffset
     rl.on('line', (line) => {
         if (checks.every(check => check(line))){
-            hits.push(index)
+            console.log("Hit: "+line)
+            valueIdHits.push(index)
             if (options.customScore) scores.push(options.customScore(line, term))
             else scores.push(1/(levenshtein.get(line, term)+1))
         }
         index++
     }).on('close', () => {
-        let subObjDocIds = require('./loadUint32')('./'+path+'.subObjIds')
-        // let mainDocIds = require('./loadUint32')('./'+path+'.mainIds')
-        let valIds = require('./loadUint32')('./'+path+'.valIds')
+        
+        // let mainDocIds = getIndex(path+'.mainIds')
+        let valIds = getIndex(path+'.valIds')
+
+        let hasTokens = fs.existsSync(path+'.tokens.valIds')
+        if (hasTokens)
+            var tokenValIds = getIndex(path+'.tokens.valIds')
 
         let valueIdDocids = []
         let valueIdDocidScores = []
-        hits.forEach((hit, index) => {
+        valueIdHits.forEach((hit, index) => {
             let rows = binarySearchAll(valIds, hit)
             valueIdDocids = valueIdDocids.concat(rows)
             valueIdDocidScores = valueIdDocidScores.concat(rows.map(() => scores[index]))
         }) // For each hit in the fulltextindex, find all rows in the materialized index
         // let mainds = valueIdDocids.map(validIndex => mainDocIds[validIndex]) // For each hit in the materialized index, get the main ids
 
+        let subObjDocIds = getIndex(path+'.subObjIds')
         let subObjIdHits = valueIdDocids.map(validIndex => subObjDocIds[validIndex]) // For each hit in the materialized index, get the subobject ids 
         if (request.boost) {
             let boostPath = removeArrayMarker(request.boost.path)
-            let boostkvStore = new ParrallelKeyValueStore('./'+boostPath+'.boost.subObjId', './'+boostPath+'.boost.value')
+            let boostkvStore = new ParrallelKeyValueStore(boostPath+'.boost.subObjId', boostPath+'.boost.value')
             let tehBoost = subObjIdHits.map(subObjId => request.boost.fun(boostkvStore.getValue(subObjId) + request.boost.param))
             for (var i = 0; i < valueIdDocidScores.length; i++) {
                 valueIdDocidScores[i] = valueIdDocidScores[i] * tehBoost[i]
             }
         }
 
-        let kvStore = new ParrallelKeyValueStore('./'+path+'.subObjToMain.subObjIds', './'+path+'.subObjToMain.mainIds')
+        let kvStore = new ParrallelKeyValueStore(path+'.subObjToMain.subObjIds', path+'.subObjToMain.mainIds')
         let mainds = subObjIdHits.map(subObjId => kvStore.getValue(subObjId))
 
         let mainWithScore = mainds.map((id, index) => ({'id':id, 'score':valueIdDocidScores[index]})) // TODO subObjId/valueIdDocidScores => mainid is not 1:1

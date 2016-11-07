@@ -9,9 +9,6 @@ rules:
   linebreak-style:
     - error
     - unix
-  quotes:
-    - error
-    - single
   no-unused-vars:
     - warn
   semi:

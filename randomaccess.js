@@ -2,7 +2,6 @@
 // let msgpack = require('msgpack-lite')
 let decode = require('./node_modules/msgpack-lite/lib/decode').decode
 let fs = require('fs')
-
 let useMsgPack = true
 
 function getDocAtOffset(file, offset, length){
@@ -16,10 +15,15 @@ function getDocAtOffset(file, offset, length){
             else resolve(data)
         })
     })
+}
 
+function ensureFolderExists(filename){
+    var mkdirp = require('mkdirp')
+    mkdirp.sync(require('path').dirname(filename))
 }
 
 function writeArray(filename, arr){
+    ensureFolderExists(filename)
     let encode = require('./node_modules/msgpack-lite/lib/encode').encode
     let offsets = []
 

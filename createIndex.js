@@ -118,7 +118,7 @@ function forEachToken(str, cb){
 
 function createFulltextIndex(data, path, options){
     // let subfolder = options.subfolder || ''
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         let origPath = path
         path = path.split('.')
             .map(el => (el.endsWith('[]')? el.substr(0, el.length-2):el ))
@@ -166,7 +166,7 @@ function createFulltextIndex(data, path, options){
         // writeFileSync(path, new Buffer(JSON.stringify(allTerms)))
         writeFileSync(path, allTerms.join('\n'))
 
-        creatCharOffsets(path, resolve, reject)
+        creatCharOffsets(path, resolve)
     })
     .catch(err => {
         throw new Error('Error while creating index: ' + path + ' : '+err.toString())
@@ -174,7 +174,7 @@ function createFulltextIndex(data, path, options){
 
 }
 
-function creatCharOffsets(path, resolve, reject){
+function creatCharOffsets(path, resolve){
 
     const readline = require('readline')
     let stream = fs.createReadStream(path)

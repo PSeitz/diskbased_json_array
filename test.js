@@ -133,21 +133,34 @@ function search(dbfolder){
 
     if (!process.cwd().endsWith(dbfolder))
         process.chdir(process.cwd()+'/'+dbfolder)
+
     let searchindex = require('./searchindex')
+
+    // let request = {
+    //     search: {
+    //         term:'我慢汁',
+    //         path:'kanji[].text',
+    //         levenshtein_distance:1,
+    //         firstCharExactMatch:true
+    //     },
+    //     boost: {
+    //         path:'kanji[].commonness',
+    //         fun: Math.log1p,
+    //         param: +1
+    //     }
+    // }
 
     let request = {
         search: {
-            term:'我慢汁',
-            path:'kanji[].text',
+            term:'Missachtung',
+            path:'meanings.ger[]',
             levenshtein_distance:1,
             firstCharExactMatch:true
-        },
-        boost: {
-            path:'kanji[].commonness',
-            fun: Math.log1p,
-            param: +1
         }
     }
+
+    
+
     // わが輩
     
     // let mainsIds = searchindex.search('meanings.text', 'ohne Missgeschick', , {exact:true, levenshtein_distance:2})
@@ -162,18 +175,19 @@ function search(dbfolder){
             //     return entry.kanji && entry.kanji[0] && entry.kanji[0].commonness >0
             // }))
             console.timeEnd('thesearch')
-            console.log(JSON.stringify(data.map(entry => entry), null, 2))
+            // console.log(JSON.stringify(data.map(entry => entry.meanings.ger), null, 2))
+            console.log(data.length)
         })
     })
 
 }
 
-create()
-.then(() => {
-    search('jmdict')
-})
+// create()
+// .then(() => {
+//     search('jmdict')
+// })
 
-// search('jmdict')  
+search('jmdict')  
 
 // let parentValId = require('fs').readFileSync('meanings.text.tokens.parentValId')
 // let parentIds = new Uint32Array(parentValId.buffer, parentValId.offset, parentValId.buffer.length)
