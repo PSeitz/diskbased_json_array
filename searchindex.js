@@ -54,17 +54,37 @@ class CharOffset{
     }
 }
 
-
-class ParrallelKeyValueStore{
-    constructor(key, value){
+class IndexKeyValueStore{
+    constructor(key, value1, value2){
         this.keys = typeof key ==='string' ? getIndex(key) : key
-        this.values = typeof value ==='string' ? getIndex(value) : value
+        this.values1 = typeof value1 ==='string' ? getIndex(value1) : value1
+        if(value2) this.values2 = typeof value2 ==='string' ? getIndex(value2) : value2
     }
-    getValue(key){
+    getValue1(key){
         let pos = binarySearch(this.keys, key)
-        return this.values[pos]
+        return this.values1[pos]
+    }
+    getValue2(key){
+        let pos = binarySearch(this.keys, key)
+        return this.values2[pos]
     }
 }
+
+class TokensIndexKeyValueStore{
+    constructor(path){
+        this.store = new IndexKeyValueStore(path+'.tokens.valIds', path+'.tokens.parentValId', path+'.tokens.subObjIds')
+    }
+    get keys() { return this.store.keys }
+    get parentValIds(){ return this.store.values1 }
+    get subObjIds(){ return this.store.values2 }
+    getParentValId(key){
+        return this.store.getValue1(key)
+    }
+    getSubObjId(key){
+        return this.store.getValue2(key)
+    }
+}
+
 
 function removeArrayMarker(path){
     return path.split('.')
@@ -72,7 +92,21 @@ function removeArrayMarker(path){
         .join('.')
 }
 
+function getRows(valueIdHits, scoreHits, valIdsIndex){
 
+    let valueIdDocids = []
+    let valueIdDocidScores = []
+    valueIdHits.forEach((hit, index) => {
+        let rows = binarySearchAll(valIdsIndex, hit)
+        console.log(rows)
+        valueIdDocids = valueIdDocids.concat(rows)
+        valueIdDocidScores = valueIdDocidScores.concat(rows.map(() => scoreHits[index]))
+    }) // For each hit in the fulltextindex, find all rows in the materialized index
+    return {
+        valueIdDocids:valueIdDocids,
+        valueIdDocidScores: valueIdDocidScores
+    }
+}
 
 function search(request, cb){
     let path = request.search.path
@@ -110,49 +144,47 @@ function search(request, cb){
     if (options.startsWith !== undefined) checks.push(line => line.startsWith(term))
     if (options.customCompare !== undefined) checks.push(line => options.customCompare(line))
 
-    let scores = []
+    let scoreHits = []
     let valueIdHits = [], index = charOffset.lineOffset
     rl.on('line', (line) => {
         if (checks.every(check => check(line))){
             console.log("Hit: "+line)
             valueIdHits.push(index)
-            if (options.customScore) scores.push(options.customScore(line, term))
-            else scores.push(1/(levenshtein.get(line, term)+1))
+            if (options.customScore) scoreHits.push(options.customScore(line, term))
+            else scoreHits.push(1/(levenshtein.get(line, term)+1))
         }
         index++
     }).on('close', () => {
         
         // let mainDocIds = getIndex(path+'.mainIds')
         let valIds = getIndex(path+'.valIds')
-
-        let hasTokens = fs.existsSync(path+'.tokens.valIds')
-        if (hasTokens)
-            var tokenValIds = getIndex(path+'.tokens.valIds')
-
-        let valueIdDocids = []
-        let valueIdDocidScores = []
-        valueIdHits.forEach((hit, index) => {
-            let rows = binarySearchAll(valIds, hit)
-            valueIdDocids = valueIdDocids.concat(rows)
-            valueIdDocidScores = valueIdDocidScores.concat(rows.map(() => scores[index]))
-        }) // For each hit in the fulltextindex, find all rows in the materialized index
-        // let mainds = valueIdDocids.map(validIndex => mainDocIds[validIndex]) // For each hit in the materialized index, get the main ids
+        let result = getRows(valueIdHits, scoreHits, valIds)
 
         let subObjDocIds = getIndex(path+'.subObjIds')
-        let subObjIdHits = valueIdDocids.map(validIndex => subObjDocIds[validIndex]) // For each hit in the materialized index, get the subobject ids 
+        let subObjIdHits = result.valueIdDocids.map(validIndex => subObjDocIds[validIndex]) // For each hit in the materialized index, get the subobject ids 
+
+        let hasTokens = fs.existsSync(path+'.tokens.valIds')
+        if (hasTokens){
+            let kvStore = new TokensIndexKeyValueStore(path)
+
+            let tokenResult = getRows(valueIdHits, scoreHits, kvStore.keys)
+            result.valueIdDocidScores = result.valueIdDocidScores.concat(tokenResult.valueIdDocidScores)
+            subObjIdHits = subObjIdHits.concat(tokenResult.valueIdDocids.map(validIndex => kvStore.subObjIds[validIndex])) // For each hit in the materialized index, get the subobject ids 
+            console.log(tokenResult.valueIdDocids.length)
+        }
         if (request.boost) {
             let boostPath = removeArrayMarker(request.boost.path)
-            let boostkvStore = new ParrallelKeyValueStore(boostPath+'.boost.subObjId', boostPath+'.boost.value')
-            let tehBoost = subObjIdHits.map(subObjId => request.boost.fun(boostkvStore.getValue(subObjId) + request.boost.param))
-            for (var i = 0; i < valueIdDocidScores.length; i++) {
-                valueIdDocidScores[i] = valueIdDocidScores[i] * tehBoost[i]
+            let boostkvStore = new IndexKeyValueStore(boostPath+'.boost.subObjId', boostPath+'.boost.value')
+            let tehBoost = subObjIdHits.map(subObjId => request.boost.fun(boostkvStore.getValue1(subObjId) + request.boost.param))
+            for (var i = 0; i < result.valueIdDocidScores.length; i++) {
+                result.valueIdDocidScores[i] = result.valueIdDocidScores[i] * tehBoost[i]
             }
         }
 
-        let kvStore = new ParrallelKeyValueStore(path+'.subObjToMain.subObjIds', path+'.subObjToMain.mainIds')
-        let mainds = subObjIdHits.map(subObjId => kvStore.getValue(subObjId))
+        let kvStore = new IndexKeyValueStore(path+'.subObjToMain.subObjIds', path+'.subObjToMain.mainIds')
+        let mainds = subObjIdHits.map(subObjId => kvStore.getValue1(subObjId))
 
-        let mainWithScore = mainds.map((id, index) => ({'id':id, 'score':valueIdDocidScores[index]})) // TODO subObjId/valueIdDocidScores => mainid is not 1:1
+        let mainWithScore = mainds.map((id, index) => ({'id':id, 'score':result.valueIdDocidScores[index]})) // TODO subObjId/valueIdDocidScores => mainid is not 1:1
 
         mainWithScore.sort(function(a, b) {
             return ((a.score < b.score) ? -1 : ((a.score == b.score) ? 0 : 1))
