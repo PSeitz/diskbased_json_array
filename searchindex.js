@@ -49,8 +49,8 @@ class CharOffset{
     }
     getOffsets(char){
         let pos = binarySearch(this.chars, char) 
-        let byteOffset = {start: this.byteOffsets[pos], end:this.byteOffsets[pos+1]}
-        return {byteOffset: byteOffset, lineOffset: this.lineOffsets[pos]}
+        let byteRange = {start: this.byteOffsets[pos], end:this.byteOffsets[pos+1]}
+        return {byteRange: byteRange, lineOffset: this.lineOffsets[pos]}
     }
 }
 
@@ -72,6 +72,7 @@ class IndexKeyValueStore{
 
 class TokensIndexKeyValueStore{
     constructor(path){
+        this.path = path
         this.store = new IndexKeyValueStore(path+'.tokens.valIds', path+'.tokens.parentValId', path+'.tokens.subObjIds')
     }
     get keys() { return this.store.keys }
@@ -83,6 +84,9 @@ class TokensIndexKeyValueStore{
     getSubObjId(key){
         return this.store.getValue2(key)
     }
+    getParent(key){
+        return getLine(this.path, this.getParentValId(key))
+    }
 }
 
 
@@ -92,7 +96,7 @@ function removeArrayMarker(path){
         .join('.')
 }
 
-function getRows(valueIdHits, scoreHits, valIdsIndex){
+function getIndexDocids(valueIdHits, scoreHits, valIdsIndex){
 
     let valueIdDocids = []
     let valueIdDocidScores = []
@@ -107,6 +111,36 @@ function getRows(valueIdHits, scoreHits, valIdsIndex){
         valueIdDocidScores: valueIdDocidScores
     }
 }
+
+let charOffsetCache = {}
+
+function getTextLines(options, onLine){ //options: path, char
+    let charOffset = {lineOffset:0}
+    if(options.char){
+        charOffsetCache.path = charOffsetCache.path || new CharOffset(options.path)
+        charOffset = charOffsetCache.path.getOffsets(options.char) 
+        console.log("START: " + charOffset.lineOffset)
+    }
+    return new Promise(resolve => {
+        const readline = require('readline')
+        let stream = fs.createReadStream(options.path, charOffset.byteRange)
+        const rl = readline.createInterface({ input: stream})
+        rl.on('line', line => {
+            onLine(line, charOffset.lineOffset)
+            charOffset.lineOffset++
+        })
+        rl.on('close', resolve)
+    })
+}
+
+function getLine(path, line, onLine){ //options: path, char
+    return new Promise(resolve => {
+        getTextLines({path:path}, (line, linePos) => {
+            if (linePos == line) resolve(line)
+        })
+    })
+}
+
 
 function search(request, cb){
     let path = request.search.path
@@ -128,16 +162,7 @@ function search(request, cb){
     let origPath = path
     path = removeArrayMarker(path)
     console.time('SearchTime Netto')
-    let charOffset = {lineOffset:0}
-    if (options.exact || options.firstCharExactMatch || options.startsWith) {
-        let charOffsets = new CharOffset(path)
-        charOffset = charOffsets.getOffsets(term.charAt(0)) 
-    }
-
-    const readline = require('readline')
-    let stream = fs.createReadStream(path, charOffset.byteOffset)
-    const rl = readline.createInterface({ input: stream})
-
+    
     let checks = []
     if (options.exact !== undefined) checks.push(line => line == term)
     if (options.levenshtein_distance !== undefined) checks.push(line => levenshtein.get(line, term) <= options.levenshtein_distance)
@@ -145,20 +170,20 @@ function search(request, cb){
     if (options.customCompare !== undefined) checks.push(line => options.customCompare(line))
 
     let scoreHits = []
-    let valueIdHits = [], index = charOffset.lineOffset
-    rl.on('line', (line) => {
+    let valueIdHits = []
+
+    getTextLines({path:path, char:term.charAt(0)}, (line, linePos) => {
         if (checks.every(check => check(line))){
-            console.log("Hit: "+line)
-            valueIdHits.push(index)
+            console.log("Hit: "+line + " linePos:"+linePos)
+            valueIdHits.push(linePos)
             if (options.customScore) scoreHits.push(options.customScore(line, term))
             else scoreHits.push(1/(levenshtein.get(line, term)+1))
         }
-        index++
-    }).on('close', () => {
-        
+    })
+    .then(() => {
         // let mainDocIds = getIndex(path+'.mainIds')
         let valIds = getIndex(path+'.valIds')
-        let result = getRows(valueIdHits, scoreHits, valIds)
+        let result = getIndexDocids(valueIdHits, scoreHits, valIds)
 
         let subObjDocIds = getIndex(path+'.subObjIds')
         let subObjIdHits = result.valueIdDocids.map(validIndex => subObjDocIds[validIndex]) // For each hit in the materialized index, get the subobject ids 
@@ -167,7 +192,15 @@ function search(request, cb){
         if (hasTokens){
             let kvStore = new TokensIndexKeyValueStore(path)
 
-            let tokenResult = getRows(valueIdHits, scoreHits, kvStore.keys)
+            let tokenResult = getIndexDocids(valueIdHits, scoreHits, kvStore.keys)
+
+            console.log("AYY")
+            console.log(tokenResult.valueIdDocids.length)
+            console.log(kvStore.subObjIds[tokenResult.valueIdDocids[0]])
+            console.log(tokenResult.valueIdDocids[0])
+
+            kvStore.getParent(tokenResult.valueIdDocids[0]).then(console.log)
+
             result.valueIdDocidScores = result.valueIdDocidScores.concat(tokenResult.valueIdDocidScores)
             subObjIdHits = subObjIdHits.concat(tokenResult.valueIdDocids.map(validIndex => kvStore.subObjIds[validIndex])) // For each hit in the materialized index, get the subobject ids 
             console.log(tokenResult.valueIdDocids.length)
@@ -194,6 +227,7 @@ function search(request, cb){
         console.timeEnd('SearchTime Netto')
         if(cb) cb(mainWithScore)
     })
+
 
 }
 
