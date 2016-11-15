@@ -47,7 +47,17 @@ class CharOffset{
         this.byteOffsets = getIndex(path+'.charOffsets.byteOffsets')
         this.lineOffsets = getIndex(path+'.charOffsets.lineOffset')
     }
-    getOffsets(char){
+    getClosestOffset(linePos){
+        for (var pos = 0; pos < this.lineOffsets.length; pos++) {
+            if(this.lineOffsets[pos] > linePos) {
+                pos--
+                break
+            }
+        }
+        let byteRange = {start: this.byteOffsets[pos], end:this.byteOffsets[pos+1]}
+        return {byteRange: byteRange, lineOffset: this.lineOffsets[pos]}
+    }
+    getOffsetInfo(char){
         let pos = binarySearch(this.chars, char) 
         let byteRange = {start: this.byteOffsets[pos], end:this.byteOffsets[pos+1]}
         return {byteRange: byteRange, lineOffset: this.lineOffsets[pos]}
@@ -114,12 +124,19 @@ function getHitsIndexDocids(valueIdHits, scoreHits, valIdsIndex){
 
 let charOffsetCache = {}
 
+function getCreateCharOffsets(path) {
+    charOffsetCache.path = charOffsetCache.path || new CharOffset(path)
+    return charOffsetCache.path
+}
+
 function getTextLines(options, onLine){ //options: path, char
     let charOffset = {lineOffset:0}
     if(options.char){
-        charOffsetCache.path = charOffsetCache.path || new CharOffset(options.path)
-        charOffset = charOffsetCache.path.getOffsets(options.char) 
+        charOffset = getCreateCharOffsets(options.path).getOffsetInfo(options.char)
         console.log("START: " + charOffset.lineOffset)
+    }
+    if (options.linePos) {
+        charOffset = getCreateCharOffsets(options.path).getClosestOffset(options.linePos)
     }
     return new Promise(resolve => {
         const readline = require('readline')
@@ -133,10 +150,11 @@ function getTextLines(options, onLine){ //options: path, char
     })
 }
 
-function getLine(path, line){ //options: path, char
+function getLine(path, linePos){ //options: path, char
     return new Promise(resolve => {
-        getTextLines({path:path}, (lineText, linePos) => {
-            if (linePos == line) {
+        getTextLines({path:path, linePos:linePos}, (lineText, currentLinePos) => {
+            if (currentLinePos == linePos) {
+                console.log(lineText)
                 resolve(lineText)
             }
         })
