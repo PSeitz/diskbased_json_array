@@ -11,13 +11,19 @@ function ensureFolderExists(dbfolder){
 
 
 function createDatabase(data, dbfolder, indices, filterSchema){
+    
+    let parentDir = process.cwd()
     ensureFolderExists(dbfolder)
-    process.chdir(process.cwd()+'/'+dbfolder)
+    process.chdir(parentDir+'/'+dbfolder)
 
     if(filterSchema)
         data = jsonfilter.filterWithSchema(data, filterSchema)
     randomaccess.writeArray('data', data)
     return createindex.createIndices(data, indices)
+    .then(()=> {
+        process.chdir(parentDir)
+
+    })
 }
 
 function createDatabaseFromFile(filename, dbfolder, indices, filterSchema){

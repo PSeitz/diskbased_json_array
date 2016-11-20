@@ -112,7 +112,6 @@ function getHitsIndexDocids(valueIdHits, scoreHits, valIdsIndex){
     let valueIdDocidScores = []
     valueIdHits.forEach((hit, index) => {
         let rows = binarySearchAll(valIdsIndex, hit)
-        console.log(rows)
         valueIdDocids = valueIdDocids.concat(rows)
         valueIdDocidScores = valueIdDocidScores.concat(rows.map(() => scoreHits[index]))
     }) // For each hit in the fulltextindex, find all rows in the materialized index
@@ -154,7 +153,7 @@ function getLine(path, linePos){ //options: path, char
     return new Promise(resolve => {
         getTextLines({path:path, linePos:linePos}, (lineText, currentLinePos) => {
             if (currentLinePos == linePos) {
-                console.log(lineText)
+                // console.log(lineText)
                 resolve(lineText)
             }
         })
@@ -167,7 +166,7 @@ function tokenResults(term, path, valueIdHits, scoreHits, result, subObjIdHits){
 
     let tokenKVData = new TokensIndexKeyValueStore(path)
     let tokenResult = getHitsIndexDocids(valueIdHits, scoreHits, tokenKVData.keys)
-
+    console.log(tokenResult)
     return Promise.all(tokenResult.valueIdDocids.map(validIndex => {
         return tokenKVData.getParent(validIndex).then(parentString => {
             result.valueIdDocidScores.push(1/(levenshtein.get(parentString, term)+1))
@@ -176,9 +175,33 @@ function tokenResults(term, path, valueIdHits, scoreHits, result, subObjIdHits){
     }))
 }
 
+function getHits(path, options, term){
+    let scoreHits = []
+    let valueIdHits = []
+    let checks = []
+    if (options.exact !== undefined) checks.push(line => line == term)
+    if (options.levenshtein_distance !== undefined) checks.push(line => levenshtein.get(line, term) <= options.levenshtein_distance)
+    if (options.startsWith !== undefined) checks.push(line => line.startsWith(term))
+    if (options.customCompare !== undefined) checks.push(line => options.customCompare(line))
+
+    return getTextLines({path:path, char:term.charAt(0)}, (line, linePos) => {
+        console.log("Check: "+line + " linePos:"+linePos)
+        if (checks.every(check => check(line))){
+            console.log("Hit: "+line + " linePos:"+linePos)
+            valueIdHits.push(linePos)
+            if (options.customScore) scoreHits.push(options.customScore(line, term))
+            else scoreHits.push(1/(levenshtein.get(line, term)+1))
+        }
+    }).then(() => {
+        return {scoreHits:scoreHits, valueIdHits:valueIdHits}
+    })
+}
+
 function search(request, cb){
+
+
     let path = request.search.path
-    let term = request.search.term
+    let term = request.search.term.toLowerCase()
     let options = request.search
 
     //     let request = {
@@ -197,28 +220,31 @@ function search(request, cb){
     path = removeArrayMarker(path)
     console.time('SearchTime Netto')
     
-    let checks = []
-    if (options.exact !== undefined) checks.push(line => line == term)
-    if (options.levenshtein_distance !== undefined) checks.push(line => levenshtein.get(line, term) <= options.levenshtein_distance)
-    if (options.startsWith !== undefined) checks.push(line => line.startsWith(term))
-    if (options.customCompare !== undefined) checks.push(line => options.customCompare(line))
+    // let checks = []
+    // if (options.exact !== undefined) checks.push(line => line == term)
+    // if (options.levenshtein_distance !== undefined) checks.push(line => levenshtein.get(line, term) <= options.levenshtein_distance)
+    // if (options.startsWith !== undefined) checks.push(line => line.startsWith(term))
+    // if (options.customCompare !== undefined) checks.push(line => options.customCompare(line))
 
-    let scoreHits = []
-    let valueIdHits = []
-
-    getTextLines({path:path, char:term.charAt(0)}, (line, linePos) => {
-        if (checks.every(check => check(line))){
-            console.log("Hit: "+line + " linePos:"+linePos)
-            valueIdHits.push(linePos)
-            if (options.customScore) scoreHits.push(options.customScore(line, term))
-            else scoreHits.push(1/(levenshtein.get(line, term)+1))
-        }
-    })
-    .then(() => {
+    getHits(path, options, term)
+    // getTextLines({path:path, char:term.charAt(0)}, (line, linePos) => {
+    //     console.log("Check: "+line + " linePos:"+linePos)
+    //     if (checks.every(check => check(line))){
+    //         console.log("Hit: "+line + " linePos:"+linePos)
+    //         valueIdHits.push(linePos)
+    //         if (options.customScore) scoreHits.push(options.customScore(line, term))
+    //         else scoreHits.push(1/(levenshtein.get(line, term)+1))
+    //     }
+    // })
+    .then(res => {
+        let scoreHits = res.scoreHits
+        let valueIdHits = res.valueIdHits
+        console.log("valueIdHits")
+        console.log(valueIdHits)
         // let mainDocIds = getIndex(path+'.mainIds')
         let valIds = getIndex(path+'.valIds')
-        let result = getHitsIndexDocids(valueIdHits, scoreHits, valIds)
-
+        let result = getHitsIndexDocids(valueIdHits, scoreHits, valIds) 
+        console.log(result)
         let subObjDocIds = getIndex(path+'.subObjIds')
         let subObjIdHits = result.valueIdDocids.map(validIndex => subObjDocIds[validIndex]) // For each hit in the materialized index, get the subobject ids 
 
@@ -254,5 +280,6 @@ function search(request, cb){
 
 
 let service = {}
+service.getHits = getHits
 service.search = search
 module.exports = service

@@ -23,6 +23,7 @@ function normalizeText(text){
     text = text.replace(/ *\([^)]*\) */g, ' ') // remove everything in braces
     text = text.replace(/[{}'"]/g, '') // remove ' " {}
     text = text.replace(/\s\s+/g, ' ') // replace tabs, newlines, double spaces with single spaces
+    text = text.toLowerCase()
     return text.trim()
 }
 
@@ -99,21 +100,27 @@ function writeFileSync(file, data){
     fs.writeFileSync(file, data)
 }
 
-function forEachToken(str, cb){
-    const regex = /(\w*)/g
-    let m
+function forEachToken(normalizedText, cb){
+    normalizedText = normalizedText.replace(/[-,.'"]/g, ' ') // remove ' " {}
+    normalizedText = normalizedText.replace(/\s\s+/g, ' ') // replace tabs, newlines, double spaces with single spaces
+    normalizedText.split(' ').forEach(term => {
+        cb(term)
+    })
 
-    while ((m = regex.exec(str)) !== null) {
-        // This is necessary to avoid infinite loops with zero-width matches
-        if (m.index === regex.lastIndex) {
-            regex.lastIndex++
-        }
+    // const regex = /(\w*)/g
+    // let m
+
+    // while ((m = regex.exec(normalizedText)) !== null) {
+    //     // This is necessary to avoid infinite loops with zero-width matches
+    //     if (m.index === regex.lastIndex) {
+    //         regex.lastIndex++
+    //     }
         
-        // The result can be accessed through the `m`-variable.
-        m.forEach((match) => {
-            if (match.length >= 2) cb(match)
-        })
-    }
+    //     // The result can be accessed through the `m`-variable.
+    //     m.forEach((match) => {
+    //         if (match.length >= 2) cb(match)
+    //     })
+    // }
 }
 
 function createFulltextIndex(data, path, options){
