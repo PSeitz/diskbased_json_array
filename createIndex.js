@@ -161,6 +161,15 @@ function createFulltextIndex(data, path, options){
         writeFileSync(path+'.valIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
         writeFileSync(path+'.mainIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
 
+        console.log(tuples.map(tuple => tuple[1]))
+
+
+        // let buf = fs.readFileSync(path)
+        // return new Uint32Array(buf.buffer, buf.offset, buf.buffer.length)
+
+        // let mainids = Array.from(require('./loadUint32')(path+'.mainids'))
+        // console.log(mainids)
+
         let subObjIds = tuples.map(tuple => tuple[2])
         writeFileSync(path+'.subObjIds', new Buffer(new Uint32Array(subObjIds).buffer))
 
@@ -190,18 +199,20 @@ function creatCharOffsets(path, resolve){
     let offsetsOnly = [], charsOnly = [], lineOffset = []
 
     let byteOffset = 0, lineNum = 0, currentChar
-    rl.on('line', (line) => {
+    rl.on('line', (line, param2) => {
         let firstCharOfLine = line.charAt(0)
         if(currentChar != firstCharOfLine){
             currentChar = firstCharOfLine
             charsOnly.push(currentChar)
             offsetsOnly.push(byteOffset)
             lineOffset.push(lineNum)
+            console.log(`${currentChar} ${byteOffset} ${lineNum}`)
         }
         byteOffset+= Buffer.byteLength(line, 'utf8') + 1 // linebreak = 1
         lineNum++
     }).on('close', () => {
         offsetsOnly.push(byteOffset)
+        console.log(offsetsOnly)
         writeFileSync(path+'.charOffsets.chars', JSON.stringify(charsOnly))
         writeFileSync(path+'.charOffsets.byteOffsets',  new Buffer(new Uint32Array(offsetsOnly).buffer))
         writeFileSync(path+'.charOffsets.lineOffset',  new Buffer(new Uint32Array(lineOffset).buffer))

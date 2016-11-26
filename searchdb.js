@@ -2,7 +2,7 @@
 console.time('thesearch')
 let randomaccess = require('./randomaccess')
 let searchindex = require('./searchindex')
-let loader = new randomaccess.Loader('data')
+
 
 function searchDb(dbfolder, request){
 
@@ -13,7 +13,9 @@ function searchDb(dbfolder, request){
         
         searchindex.search(request, mainWithScore => {
             process.chdir(parentDir)
+            let loader = new randomaccess.Loader(dbfolder)
             loader.getDocs(mainWithScore.map(el => el.id)).then(data => {
+                console.log(JSON.stringify(data, null, 2))
                 resolve(data)
             })
 

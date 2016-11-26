@@ -54,12 +54,13 @@ class CharOffset{
                 break
             }
         }
-        let byteRange = {start: this.byteOffsets[pos], end:this.byteOffsets[pos+1]}
-        return {byteRange: byteRange, lineOffset: this.lineOffsets[pos]}
+        return this.getOffsetInfo(pos)
     }
-    getOffsetInfo(char){
-        let pos = binarySearch(this.chars, char) 
-        let byteRange = {start: this.byteOffsets[pos], end:this.byteOffsets[pos+1]}
+    getCharOffsetInfo(char){
+        return this.getOffsetInfo(binarySearch(this.chars, char) )
+    }
+    getOffsetInfo(pos){
+        let byteRange = {start: this.byteOffsets[pos], end:this.byteOffsets[pos+1]-1} // -1 For the linebreak
         return {byteRange: byteRange, lineOffset: this.lineOffsets[pos]}
     }
 }
@@ -131,8 +132,8 @@ function getCreateCharOffsets(path) {
 function getTextLines(options, onLine){ //options: path, char
     let charOffset = {lineOffset:0}
     if(options.char){
-        charOffset = getCreateCharOffsets(options.path).getOffsetInfo(options.char)
-        console.log("START: " + charOffset.lineOffset)
+        charOffset = getCreateCharOffsets(options.path).getCharOffsetInfo(options.char)
+        console.log("START at Line: " + charOffset.lineOffset)
     }
     if (options.linePos) {
         charOffset = getCreateCharOffsets(options.path).getClosestOffset(options.linePos)
