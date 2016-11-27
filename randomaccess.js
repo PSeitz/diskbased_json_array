@@ -48,8 +48,8 @@ class Loader{
         this.filename = filename
         this.offsetLoading = new Promise((resolve, reject) => {
             fs.readFile(this.filename+'.offsets', (err, buf) => {
-                this.offsets = new Uint32Array(buf.buffer, buf.offset, buf.buffer.length)
                 if (err) return reject(err)
+                this.offsets = new Uint32Array(buf.buffer, buf.offset, buf.buffer.length)
                 resolve(this.offsets)
             })
         })

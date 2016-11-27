@@ -37,6 +37,19 @@ function binarySearch(arr, find) {
     return null
 }
 
+function lowerBoundSearch(arr, find) {
+    let high = arr.length-1
+    let low = 0
+    var i=low-1
+    while(low<=high){
+        var m=(low+high)>>>1
+        if(arr[m]<=find){i=m;low=m+1}
+        else{high=m-1}
+    }
+    return i
+}
+
+
 function getIndex(path){
     return require('./loadUint32')(path)
 }
@@ -48,12 +61,7 @@ class CharOffset{
         this.lineOffsets = getIndex(path+'.charOffsets.lineOffset')
     }
     getClosestOffset(linePos){
-        for (var pos = 0; pos < this.lineOffsets.length; pos++) {
-            if(this.lineOffsets[pos] > linePos) {
-                pos--
-                break
-            }
-        }
+        let pos = lowerBoundSearch(this.lineOffsets, linePos)
         return this.getOffsetInfo(pos)
     }
     getCharOffsetInfo(char){
@@ -186,7 +194,7 @@ function getHits(path, options, term){
     if (options.customCompare !== undefined) checks.push(line => options.customCompare(line))
 
     return getTextLines({path:path, char:term.charAt(0)}, (line, linePos) => {
-        console.log("Check: "+line + " linePos:"+linePos)
+        // console.log("Check: "+line + " linePos:"+linePos)
         if (checks.every(check => check(line))){
             console.log("Hit: "+line + " linePos:"+linePos)
             valueIdHits.push(linePos)
@@ -198,7 +206,7 @@ function getHits(path, options, term){
     })
 }
 
-function search(request, cb){
+function search(request){
 
 
     let path = request.search.path
@@ -220,23 +228,8 @@ function search(request, cb){
     let origPath = path
     path = removeArrayMarker(path)
     console.time('SearchTime Netto')
-    
-    // let checks = []
-    // if (options.exact !== undefined) checks.push(line => line == term)
-    // if (options.levenshtein_distance !== undefined) checks.push(line => levenshtein.get(line, term) <= options.levenshtein_distance)
-    // if (options.startsWith !== undefined) checks.push(line => line.startsWith(term))
-    // if (options.customCompare !== undefined) checks.push(line => options.customCompare(line))
 
-    getHits(path, options, term)
-    // getTextLines({path:path, char:term.charAt(0)}, (line, linePos) => {
-    //     console.log("Check: "+line + " linePos:"+linePos)
-    //     if (checks.every(check => check(line))){
-    //         console.log("Hit: "+line + " linePos:"+linePos)
-    //         valueIdHits.push(linePos)
-    //         if (options.customScore) scoreHits.push(options.customScore(line, term))
-    //         else scoreHits.push(1/(levenshtein.get(line, term)+1))
-    //     }
-    // })
+    return getHits(path, options, term)
     .then(res => {
         let scoreHits = res.scoreHits
         let valueIdHits = res.valueIdHits
@@ -249,7 +242,7 @@ function search(request, cb){
         let subObjDocIds = getIndex(path+'.subObjIds')
         let subObjIdHits = result.valueIdDocids.map(validIndex => subObjDocIds[validIndex]) // For each hit in the materialized index, get the subobject ids 
 
-        tokenResults(term, path, valueIdHits, scoreHits, result, subObjIdHits).then(()=> {
+        return tokenResults(term, path, valueIdHits, scoreHits, result, subObjIdHits).then(()=> {
             if (request.boost) {
                 let boostPath = removeArrayMarker(request.boost.path)
                 let boostkvStore = new IndexKeyValueStore(boostPath+'.boost.subObjId', boostPath+'.boost.value')
@@ -270,7 +263,7 @@ function search(request, cb){
 
             console.log(mainWithScore)
             console.timeEnd('SearchTime Netto')
-            if(cb) cb(mainWithScore)
+            return mainWithScore
         })
 
 
