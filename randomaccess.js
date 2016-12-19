@@ -38,7 +38,6 @@ function writeArray(filename, arr){
     }
     offsets.push(currentOffset)
     fs.closeSync(fd)
-
     fs.writeFileSync(filename+'.offsets', new Buffer(new Uint32Array(offsets).buffer))
 
 }
@@ -48,9 +47,11 @@ class Loader{
         this.filename = filename
         this.offsetLoading = new Promise((resolve, reject) => {
             fs.readFile(this.filename+'.offsets', (err, buf) => {
-                this.offsets = new Uint32Array(buf.buffer, buf.offset, buf.buffer.length)
-                if (err) return reject(err)
-                resolve(this.offsets)
+                if (err) reject(err)
+                else{
+                    this.offsets = new Uint32Array(buf.buffer, buf.offset, buf.buffer.length)
+                    resolve(this.offsets)
+                }
             })
         })
     }
@@ -58,7 +59,7 @@ class Loader{
         return this.loadOffsets().then(off => getDocAtOffset(this.filename, off[pos], off[pos+1] - off[pos]))
     }
     getDocs(positions){
-        return  this.loadOffsets().then(() => Promise.all(positions.map(pos =>this.getDoc(pos))))
+        return this.loadOffsets().then(() => Promise.all(positions.map(pos =>this.getDoc(pos))))
     }
     loadOffsets(){
         if (this.offsets) return Promise.resolve(this.offsets)

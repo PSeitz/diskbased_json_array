@@ -18,7 +18,7 @@ function createDatabase(data, dbfolder, indices, filterSchema){
 
     if(filterSchema)
         data = jsonfilter.filterWithSchema(data, filterSchema)
-    randomaccess.writeArray('data', data)
+    randomaccess.writeArray('json_data', data)
     return createindex.createIndices(data, indices)
     .then(()=> {
         process.chdir(parentDir)

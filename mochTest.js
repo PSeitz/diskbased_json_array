@@ -4,7 +4,12 @@ console.time('thesearch')
 let jsonfilter = require('./jsonfilter')
 let randomaccess = require('./randomaccess')
 // let _ = require("lodash");
+let chai = require('chai')
+let chaiAsPromised = require('chai-as-promised')
+chai.use(chaiAsPromised)
+
 let expect = require('chai').expect
+let should = require('chai').should()
 
 var fs = require('fs')
 var deleteFolderRecursive = function(path) {
@@ -74,7 +79,7 @@ describe('Serverless DB', function() {
             // { fulltext:'kanji[].text' }, 
             // { fulltext:'kana[].romaji' }, 
             // { fulltext:'kana[].text' }, 
-            // { fulltext:'kanji[].text' }, 
+            { fulltext:'kanji[].text' }, 
             { fulltext:'meanings.ger[]', options:{tokenize:true} }, 
             // { fulltext:'meanings.eng[]', options:{tokenize:true} }, 
             // { boost:'kanji[].commonness' , options:{type:'int'}}, 
@@ -87,19 +92,34 @@ describe('Serverless DB', function() {
         })
     })
 
-    it('should search', function(done) {
-
-        // let searchindex = require('./searchindex')
-        searchDb.searchDb('mochaTest', {search: {
+    it('should search tokenized and levensthein', function() {
+        console.log("test search123123123")
+        console.log(process.cwd())
+        return searchDb.searchDb('mochaTest', {search: {
             term:'majestätischer',
             path:'meanings.ger[]',
             levenshtein_distance:1,
             firstCharExactMatch:true
-        }}).then(data => {
-            console.log("ASDFFFFF")
-            console.log(JSON.stringify(data, null, 2))
-            done()
+        }}).then(res => {
+            // console.log(JSON.stringify(res, null, 2))
+            return res
         })
+        .should.eventually.have.length(2)
+    })
+
+    it('should search word non tokenized', function() {
+        console.log("test search123123123")
+        console.log(process.cwd())
+        return searchDb.searchDb('mochaTest', {search: {
+            term:'偉容',
+            path:'kanji[].text',
+            levenshtein_distance:0,
+            firstCharExactMatch:true
+        }}).then(res => {
+            // console.log(JSON.stringify(res, null, 2))
+            return res
+        })
+        .should.eventually.have.length(1)
     })
 
     it('should extract corect texts', function() {
@@ -108,10 +128,10 @@ describe('Serverless DB', function() {
     })
 
 
-    it('should search', function() {
-        let mainids = Array.from(require('./loadUint32')('./meanings.ger.mainids'))
-        console.log(mainids)
-    })
+    // it('should search', function() {
+    //     let mainids = Array.from(require('./loadUint32')('./meanings.ger.mainids'))
+    //     console.log(mainids)
+    // })
 
 
     

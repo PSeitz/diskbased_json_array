@@ -23,5 +23,8 @@
     "fast-levenshtein": "^2.0.5",
     "lodash": "^4.16.4",
     "msgpack-lite": "^0.1.26"
+  },
+  "devDependencies": {
+    "chai-as-promised": "^6.0.0"
   }
 }
