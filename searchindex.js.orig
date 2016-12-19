@@ -222,6 +222,10 @@ function getHits(path, options, term){
 }
 
 function search(request){
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/master
 
     let path = request.search.path
     let term = request.search.term.toLowerCase()
@@ -242,6 +246,15 @@ function search(request){
     let origPath = path
     path = removeArrayMarker(path)
     console.time('SearchTime Netto')
+<<<<<<< HEAD
+    
+    // let checks = []
+    // if (options.exact !== undefined) checks.push(line => line == term)
+    // if (options.levenshtein_distance !== undefined) checks.push(line => levenshtein.get(line, term) <= options.levenshtein_distance)
+    // if (options.startsWith !== undefined) checks.push(line => line.startsWith(term))
+    // if (options.customCompare !== undefined) checks.push(line => options.customCompare(line))
+=======
+>>>>>>> origin/master
 
     return getHits(path, options, term)
     .then(res => {
@@ -256,6 +269,7 @@ function search(request){
         let subObjDocIds = getIndex(path+'.subObjIds')
         let subObjIdHits = result.valueIdDocids.map(validIndex => subObjDocIds[validIndex]) // For each hit in the materialized index, get the subobject ids 
 
+<<<<<<< HEAD
         return addTokenResults(term, path, valueIdHits, scoreHits, result, subObjIdHits).then(()=> {
             addBoost(request, subObjIdHits, result)
             // if (request.boost) {
@@ -266,6 +280,17 @@ function search(request){
             //         result.valueIdDocidScores[i] = result.valueIdDocidScores[i] * tehBoost[i]
             //     }
             // }
+=======
+        return tokenResults(term, path, valueIdHits, scoreHits, result, subObjIdHits).then(()=> {
+            if (request.boost) {
+                let boostPath = removeArrayMarker(request.boost.path)
+                let boostkvStore = new IndexKeyValueStore(boostPath+'.boost.subObjId', boostPath+'.boost.value')
+                let tehBoost = subObjIdHits.map(subObjId => request.boost.fun(boostkvStore.getValue1(subObjId) + request.boost.param))
+                for (var i = 0; i < result.valueIdDocidScores.length; i++) {
+                    result.valueIdDocidScores[i] = result.valueIdDocidScores[i] * tehBoost[i]
+                }
+            }
+>>>>>>> origin/master
 
             let kvStore = new IndexKeyValueStore(path+'.subObjToMain.subObjIds', path+'.subObjToMain.mainIds')
             let mainds = subObjIdHits.map(subObjId => kvStore.getValue1(subObjId))
@@ -277,6 +302,10 @@ function search(request){
 
             console.log(mainWithScore)
             console.timeEnd('SearchTime Netto')
+<<<<<<< HEAD
+
+=======
+>>>>>>> origin/master
             return mainWithScore
         })
 
