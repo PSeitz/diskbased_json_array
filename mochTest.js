@@ -2,6 +2,7 @@
 /* eslint-env node, mocha */
 console.time('thesearch')
 let jsonfilter = require('./jsonfilter')
+let util = require('./util')
 let randomaccess = require('./randomaccess')
 // let _ = require("lodash");
 let chai = require('chai')
@@ -30,10 +31,10 @@ var deleteFolderRecursive = function(path) {
 let database = require('./database')
 
 let data = [
-    {
+    {                                           // anchor id 0
         "kanji": [
-            { "text": "偉容", "commonness": 0},
-            {"text": "威容","commonness": 5}
+            { "text": "偉容", "commonness": 0}, // kanji id 0
+            { "text": "威容","commonness": 5}   // kanji id 1
         ],
         "kana": [
             {
@@ -42,16 +43,16 @@ let data = [
                 "commonness": 5,
             }
         ],
-        "meanings": {
+        "meanings": {   // meanings id 0
             "eng" : ["dignity", "majestic appearance"],
-            "ger": ["majestätischer Anblick (m)", "majestätisches Aussehen (n)", "Majestät (f)"]
+            "ger": ["majestätischer Anblick (m)", "majestätisches Aussehen (n)", "Majestät (f)"] // meanings.ger id 0, 1, 2 .. 
         },
         "ent_seq": "1587680"
     },
-    {
+    {                                           // anchor id 1
         "kanji": [
-            { "text": "意欲", "commonness": 40},
-            { "text": "意慾", "commonness": 0}
+            { "text": "意欲", "commonness": 40}, // kanji id 2
+            { "text": "意慾", "commonness": 0}   // kanji id 3
         ],
         "kana": [
             {
@@ -60,9 +61,9 @@ let data = [
                 "commonness": 40,
             }
         ],
-        "meanings": {
+        "meanings": { // meanings id 1
             "eng" : ["will", "desire", "urge"],
-            "ger": ["Wollen (n)", "Wille (m)", "Begeisterung (f)"]
+            "ger": ["Wollen (n)", "Wille (m)", "Begeisterung (f)"] // meanings.ger id .. 5, 6 7 
         },
         "ent_seq": "1587690"
     }]
@@ -127,17 +128,19 @@ describe('Serverless DB', function() {
         expect(allValues).to.eql(['anblick','aussehen','begeisterung','majestät','majestätischer','majestätischer anblick','majestätisches','majestätisches aussehen','wille','wollen'])
     })
 
+    it('should detect the path to anchor', function() {
+        expect(util.getStepsToAnchor('kanji[].text')).to.eql(['kanji[]'])
+        expect(util.getStepsToAnchor('meanings.ger[]')).to.eql(['meanings.ger[]'])
+    })
 
+    
     // it('should search', function() {
     //     let mainids = Array.from(require('./loadUint32')('./meanings.ger.mainids'))
     //     console.log(mainids)
     // })
 
-
-    
     after(function() {
         // deleteFolderRecursive('mochaTest')
     })
-
 
 })

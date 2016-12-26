@@ -175,7 +175,7 @@ function search(dbfolder){
             //     return entry.kanji && entry.kanji[0] && entry.kanji[0].commonness >0
             // }))
             console.timeEnd('thesearch')
-            // console.log(JSON.stringify(data.map(entry => entry.meanings.ger), null, 2))
+            console.log(JSON.stringify(data.map(entry => entry.meanings.ger[0]), null, 2))
             console.log(data.length)
         })
     })

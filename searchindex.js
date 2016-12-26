@@ -199,7 +199,9 @@ function addTokenResults(term, path, valueIdHits, scoreHits, result, subObjIdHit
     }))
 }
 
-function getHits(path, options, term){
+
+/* Returns then value ids and scores*/
+function getHitsInField(path, options, term){
     let scoreHits = []
     let valueIdHits = []
     let checks = []
@@ -220,6 +222,7 @@ function getHits(path, options, term){
         return {scoreHits:scoreHits, valueIdHits:valueIdHits}
     })
 }
+
 
 function search(request){
 
@@ -243,7 +246,7 @@ function search(request){
     path = removeArrayMarker(path)
     console.time('SearchTime Netto')
 
-    return getHits(path, options, term)
+    return getHitsInField(path, options, term)
     .then(res => {
         let scoreHits = res.scoreHits
         let valueIdHits = res.valueIdHits
@@ -288,6 +291,6 @@ function search(request){
 
 
 let service = {}
-service.getHits = getHits
+service.getHitsInField = getHitsInField
 service.search = search
 module.exports = service

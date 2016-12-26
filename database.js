@@ -22,7 +22,10 @@ function createDatabase(data, dbfolder, indices, filterSchema){
     return createindex.createIndices(data, indices)
     .then(()=> {
         process.chdir(parentDir)
-
+    })
+    .catch(err => {
+        console.log(err)
+        throw err
     })
 }
 

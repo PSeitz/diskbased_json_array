@@ -1,7 +1,7 @@
 'use strict'
 var fs = require('fs')
 var _ = require('lodash')
-
+var util = require('./util')
 
 function binarySearch(arr, find) {
     var low = 0, high = arr.length - 1,i
@@ -31,7 +31,7 @@ function getAllterms(data, path, options, existingTerms){
     options = options || {}
     let terms = existingTerms || {}
 
-    forEachPath(data, path, (value) => {
+    forEachElementInPath(data, path, (value) => {
         let normalizedText = normalizeText(value)
         terms[normalizedText] = true
         if (options.tokenize) 
@@ -45,9 +45,11 @@ function getAllterms(data, path, options, existingTerms){
 // console.log(terms[1000]);
 
 
-function forEachPath(data, path, cb) {
+function forEachElementInPath(data, path, cb) {
+    path = util.removeArrayMarker(path)
     let paths = path.split('.')
     let subObjId = 0
+    let valueId = 0
     let currentEl
     for (let mainId = 0; mainId < data.length; mainId++) {  
         let entry = data[mainId]
@@ -61,8 +63,9 @@ function forEachPath(data, path, cb) {
             if(_.isArray(currentEl)){
                 if (_.last(paths) == comp){
                     currentEl.forEach(el => {
+                        valueId++
                         subObjId++
-                        cb(el, mainId, subObjId)
+                        cb(el, valueId, mainId, subObjId)
                     })
                 }else{
                     comp = paths[++i] // move to next level
@@ -79,7 +82,8 @@ function forEachPath(data, path, cb) {
                 }
             }else{
                 if (_.last(paths) == comp){
-                    cb(currentEl, mainId, subObjId)
+                    valueId++
+                    cb(currentEl, valueId, mainId, subObjId)
                 }
             }
 
@@ -123,28 +127,41 @@ function forEachToken(normalizedText, cb){
     // }
 }
 
+
+
 function createFulltextIndex(data, path, options){
     // let subfolder = options.subfolder || ''
     return new Promise((resolve) => {
         let origPath = path
-        path = path.split('.')
-            .map(el => (el.endsWith('[]')? el.substr(0, el.length-2):el ))
-            .join('.')
+        path = util.removeArrayMarker(path)
 
         options = options || {}
         let allTerms = getAllterms(data, path, options)
 
-
         let tuples = []
         let tokens = []
 
-        forEachPath(data, path, (value, mainId, subObjId) => {
+        let paths = util.getStepsToAnchor(origPath)
+        console.log("AKSJD ALSKJD HLAKSJDH")
+        console.log(paths)
+        paths.forEach(pathToAnchor => {
+            console.log("ASDASDASDASD")
+            console.log(pathToAnchor)
+            forEachElementInPath(data, pathToAnchor, (value, valueId, mainId, subObjId) => {
+                console.log("AJAJAJAJAJAAJ")
+                console.log(valueId)
+                console.log(subObjId)
+                console.log(mainId)
+                console.log(value)
+            })
+        })
+
+        forEachElementInPath(data, path, (value, valueId, mainId, subObjId) => {
             let normalizedText = normalizeText(value)
             let valId = getValueID(allTerms, normalizedText)
-            if (subObjId) {
-                tuples.push([valId, mainId, subObjId])
-            }
-            else tuples.push([valId, mainId])
+            
+            tuples.push(subObjId ? [valId, mainId, subObjId] : [valId, mainId])
+
             if (options.tokenize && normalizedText.split(' ').length > 1) 
                 forEachToken(normalizedText, token => tokens.push([getValueID(allTerms, token), mainId, subObjId, valId]))
                 // normalizedText.split(' ').forEach(token => tokens.push([getValueID(allTerms, token), mainId, subObjId, valId]))
@@ -225,14 +242,12 @@ function creatCharOffsets(path, resolve){
 function createBoostIndex(data, path, options, cb){
 
     let origPath = path
-    path = path.split('.')
-        .map(el => (el.endsWith('[]')? el.substr(0, el.length-2):el ))
-        .join('.')
+    path = util.removeArrayMarker(path)
 
     options = options || {}
 
     let tuples = []
-    forEachPath(data, path, (value, mainId, subObjId) => {
+    forEachElementInPath(data, path, (value, valueId, mainId, subObjId) => {
         if (options.type == 'int') {
             tuples.push([subObjId, value])
         }else{
