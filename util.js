@@ -18,10 +18,21 @@ function getStepsToAnchor(path){
         if (part.endsWith('[]'))
             paths.push(current.join('.'))
     })
+    paths.push(path) // add complete path
     return paths
+}
+
+function getLevel(path){
+    return (path.match(/\[\]/g) || []).length
+}
+
+function getPathName(pathToAnchor, isTextIndexPart){
+    return pathToAnchor + (isTextIndexPart?'.textindex':'')
 }
 
 service.removeArrayMarker = removeArrayMarker
 service.getStepsToAnchor = getStepsToAnchor
+service.getLevel = getLevel
+service.getPathName = getPathName
 
 module.exports = service

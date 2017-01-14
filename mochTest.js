@@ -74,14 +74,15 @@ let searchDb = require('./searchDb')
 
 describe('Serverless DB', function() {
     let dbfolder = 'mochaTest'
+    this.timeout(10000)
     before(function(done) {
         database.createDatabase(data, dbfolder, [
-            // { fulltext:'entseq' },
+            { fulltext:'ent_seq' },
             // { fulltext:'kanji[].text' }, 
             // { fulltext:'kana[].romaji' }, 
             // { fulltext:'kana[].text' }, 
             { fulltext:'kanji[].text' }, 
-            { fulltext:'meanings.ger[]', options:{tokenize:true} }, 
+            { fulltext:'meanings.ger[]', options:{tokenize:true} },
             // { fulltext:'meanings.eng[]', options:{tokenize:true} }, 
             // { boost:'kanji[].commonness' , options:{type:'int'}}, 
             // { boost:'kana[].commonness', options:{type:'int'} }
@@ -94,8 +95,6 @@ describe('Serverless DB', function() {
     })
 
     it('should search tokenized and levensthein', function() {
-        console.log("test search123123123")
-        console.log(process.cwd())
         return searchDb.searchDb('mochaTest', {search: {
             term:'majestätischer',
             path:'meanings.ger[]',
@@ -105,7 +104,7 @@ describe('Serverless DB', function() {
             // console.log(JSON.stringify(res, null, 2))
             return res
         })
-        .should.eventually.have.length(2)
+        .should.eventually.have.length(1)
     })
 
     it('should search word non tokenized', function() {
@@ -123,14 +122,27 @@ describe('Serverless DB', function() {
         .should.eventually.have.length(1)
     })
 
+    // it('should search on non subobject', function() {
+    //     return searchDb.searchDb('mochaTest', {search: {
+    //         term:'1587690',
+    //         path:'ent_seq',
+    //         levenshtein_distance:0,
+    //         firstCharExactMatch:true
+    //     }}).then(res => {
+    //         // console.log(JSON.stringify(res, null, 2))
+    //         return res
+    //     })
+    //     .should.eventually.have.length(1)
+    // })
+
     it('should extract corect texts', function() {
-        let allValues = fs.readFileSync('./meanings.ger', 'utf-8').split('\n')
+        let allValues = fs.readFileSync('./meanings.ger[]', 'utf-8').split('\n')
         expect(allValues).to.eql(['anblick','aussehen','begeisterung','majestät','majestätischer','majestätischer anblick','majestätisches','majestätisches aussehen','wille','wollen'])
     })
 
     it('should detect the path to anchor', function() {
-        expect(util.getStepsToAnchor('kanji[].text')).to.eql(['kanji[]'])
-        expect(util.getStepsToAnchor('meanings.ger[]')).to.eql(['meanings.ger[]'])
+        expect(util.getStepsToAnchor('kanji[].text')).to.eql(['kanji[]', 'kanji[].text'])
+        expect(util.getStepsToAnchor('meanings.ger[]')).to.eql(['meanings.ger[]', 'meanings.ger[]'])
     })
 
     

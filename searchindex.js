@@ -2,6 +2,7 @@
 let fs = require('fs')
 // let _ = require('lodash')
 let levenshtein = require('fast-levenshtein')
+var util = require('./util')
 
 function binarySearchAll(arr, find) {
     let low = 0, high = arr.length - 1,i
@@ -75,13 +76,17 @@ class CharOffset{
 
 class IndexKeyValueStore{
     constructor(key, value1, value2){
-        this.keys = typeof key ==='string' ? getIndex(key) : key
-        this.values1 = typeof value1 ==='string' ? getIndex(value1) : value1
-        if(value2) this.values2 = typeof value2 ==='string' ? getIndex(value2) : value2
+        this.keys = typeof key === 'string' ? getIndex(key) : key
+        this.values = typeof value1 === 'string' ? getIndex(value1) : value1
+        if(value2) this.values2 = typeof value2 === 'string' ? getIndex(value2) : value2
     }
-    getValue1(key){
+    getValue(key){
         let pos = binarySearch(this.keys, key)
-        return this.values1[pos]
+        return this.values[pos]
+    }
+    getValues(key){
+        let rows = binarySearchAll(this.keys, key)
+        return rows.map(row => this.values[row])
     }
     getValue2(key){
         let pos = binarySearch(this.keys, key)
@@ -92,19 +97,25 @@ class IndexKeyValueStore{
 class TokensIndexKeyValueStore{
     constructor(path){
         this.path = path
-        this.store = new IndexKeyValueStore(path+'.tokens.valIds', path+'.tokens.parentValId', path+'.tokens.subObjIds')
+        this.store = new IndexKeyValueStore(path+'.tokens.tokenValIds', path+'.tokens.parentValId')
     }
     get keys() { return this.store.keys }
-    get parentValIds(){ return this.store.values1 }
-    get subObjIds(){ return this.store.values2 }
+    get parentValIds(){ return this.store.values }
+    // get subObjIds(){ return this.store.values2 }
     getParentValId(key){
-        return this.store.getValue1(key)
+        return this.store.getValue(key)
     }
-    getSubObjId(key){
-        return this.store.getValue2(key)
+    getParentValIds(key){
+        return this.store.getValues(key)
     }
-    getParent(index){
-        return getLine(this.path, this.parentValIds[index])
+    // getSubObjId(key){
+    //     return this.store.getValue2(key)
+    // }
+    // getTextForValueId(index){
+    //     return getLine(this.path, this.parentValIds[index])
+    // }
+    getTextForValueId(index){
+        return getLine(this.path, index)
     }
 }
 
@@ -115,7 +126,7 @@ function removeArrayMarker(path){
         .join('.')
 }
 
-function getHitsIndexDocids(valueIdHits, scoreHits, valIdsIndex){
+function getAllParentValIds(valueIdHits, scoreHits, valIdsIndex){
 
     let valueIdDocids = []
     let valueIdDocidScores = []
@@ -177,33 +188,45 @@ function addBoost(request, subObjIdHits, result){
     if (request.boost) {
         let boostPath = removeArrayMarker(request.boost.path)
         let boostkvStore = new IndexKeyValueStore(boostPath+'.boost.subObjId', boostPath+'.boost.value')
-        let tehBoost = subObjIdHits.map(subObjId => request.boost.fun(boostkvStore.getValue1(subObjId) + request.boost.param))
+        let tehBoost = subObjIdHits.map(subObjId => request.boost.fun(boostkvStore.getValue(subObjId) + request.boost.param))
         for (var i = 0; i < result.valueIdDocidScores.length; i++) {
             result.valueIdDocidScores[i] = result.valueIdDocidScores[i] * tehBoost[i]
         }
     }
 }
 
-function addTokenResults(term, path, valueIdHits, scoreHits, result, subObjIdHits){
-    let hasTokens = fs.existsSync(path+'.tokens.valIds')
-    if (!hasTokens) return Promise.resolve()
+
+function addTokenResults(hits, path, term){
+    let hasTokens = fs.existsSync(path+'.tokens.tokenValIds')
+    if (!hasTokens) return Promise.resolve(hits)
 
     let tokenKVData = new TokensIndexKeyValueStore(path)
-    let tokenResult = getHitsIndexDocids(valueIdHits, scoreHits, tokenKVData.keys)
-    console.log(tokenResult)
-    return Promise.all(tokenResult.valueIdDocids.map(validIndex => {
-        return tokenKVData.getParent(validIndex).then(parentString => {
-            result.valueIdDocidScores.push(getDefaultScore(parentString, term))
-            subObjIdHits.push(tokenKVData.subObjIds[validIndex])
+    let tokenParentids = []
+
+    for (let valueId in hits) {
+        let parentIdsForToken = tokenKVData.getParentValIds(parseInt(valueId))
+        if(parentIdsForToken.length > 0){
+            delete hits[valueId]
+            tokenParentids = tokenParentids.concat(parentIdsForToken)
+        }
+    }
+
+    return Promise.all(tokenParentids.map(tokenParentvalId => {
+        return tokenKVData.getTextForValueId(tokenParentvalId)
+        .then(parentString => {
+            let score = getDefaultScore(parentString, term)
+            if(hits[tokenParentvalId]) hits[tokenParentvalId] += score
+            else hits[tokenParentvalId] = score
         })
     }))
+    .then(() => hits)
+
 }
 
 
 /* Returns then value ids and scores*/
 function getHitsInField(path, options, term){
-    let scoreHits = []
-    let valueIdHits = []
+    let hits = {} // id:score
     let checks = []
     if (options.exact !== undefined) checks.push(line => line == term)
     if (options.levenshtein_distance !== undefined) checks.push(line => levenshtein.get(line, term) <= options.levenshtein_distance)
@@ -214,12 +237,14 @@ function getHitsInField(path, options, term){
         // console.log("Check: "+line + " linePos:"+linePos)
         if (checks.every(check => check(line))){
             console.log("Hit: "+line + " linePos:"+linePos)
-            valueIdHits.push(linePos)
-            if (options.customScore) scoreHits.push(options.customScore(line, term))
-            else scoreHits.push(getDefaultScore(line, term))
+
+            let score = options.customScore ? options.customScore(line, term) : getDefaultScore(line, term)
+            if(hits[linePos]) hits[linePos] += score
+            else hits[linePos] = score
+
         }
     }).then(() => {
-        return {scoreHits:scoreHits, valueIdHits:valueIdHits}
+        return hits
     })
 }
 
@@ -246,46 +271,78 @@ function search(request){
     path = removeArrayMarker(path)
     console.time('SearchTime Netto')
 
-    return getHitsInField(path, options, term)
-    .then(res => {
-        let scoreHits = res.scoreHits
-        let valueIdHits = res.valueIdHits
-        console.log("valueIdHits")
-        console.log(valueIdHits)
+    return getHitsInField(origPath, options, term)
+    .then(res => addTokenResults(res, origPath, term))
+    .then(hits => {
+
+        console.log("hits")
+        console.log(hits)
         // let mainDocIds = getIndex(path+'.mainIds')
-        let valIds = getIndex(path+'.valIds')
-        let result = getHitsIndexDocids(valueIdHits, scoreHits, valIds) 
-        console.log(result)
-        let subObjDocIds = getIndex(path+'.subObjIds')
-        let subObjIdHits = result.valueIdDocids.map(validIndex => subObjDocIds[validIndex]) // For each hit in the materialized index, get the subobject ids 
 
-        return addTokenResults(term, path, valueIdHits, scoreHits, result, subObjIdHits).then(()=> {
-            addBoost(request, subObjIdHits, result)
-            // if (request.boost) {
-            //     let boostPath = removeArrayMarker(request.boost.path)
-            //     let boostkvStore = new IndexKeyValueStore(boostPath+'.boost.subObjId', boostPath+'.boost.value')
-            //     let tehBoost = subObjIdHits.map(subObjId => request.boost.fun(boostkvStore.getValue1(subObjId) + request.boost.param))
-            //     for (var i = 0; i < result.valueIdDocidScores.length; i++) {
-            //         result.valueIdDocidScores[i] = result.valueIdDocidScores[i] * tehBoost[i]
-            //     }
-            // }
+        // let subObjDocIds = getIndex(path+'.subObjIds')
+        // let subObjIdHits = result.valueIdDocids.map(validIndex => subObjDocIds[validIndex]) // For each hit in the materialized index, get the subobject ids 
 
-            let kvStore = new IndexKeyValueStore(path+'.subObjToMain.subObjIds', path+'.subObjToMain.mainIds')
-            let mainds = subObjIdHits.map(subObjId => kvStore.getValue1(subObjId))
-            let mainWithScore = mainds.map((id, index) => ({'id':id, 'score':result.valueIdDocidScores[index]})) // TODO subObjId/valueIdDocidScores => mainid is not 1:1
+        // return addTokenResults(term, origPath, valueIdHits, scoreHits, result, subObjIdHits, valIdsToParent).then(()=> {
 
-            mainWithScore.sort(function(a, b) {
-                return ((a.score > b.score) ? -1 : ((a.score == b.score) ? 0 : 1))
-            })
+        // addBoost(request, subObjIdHits, result)
 
-            console.log(mainWithScore)
-            console.timeEnd('SearchTime Netto')
-            return mainWithScore
+        // if (request.boost) {
+        //     let boostPath = removeArrayMarker(request.boost.path)
+        //     let boostkvStore = new IndexKeyValueStore(boostPath+'.boost.subObjId', boostPath+'.boost.value')
+        //     let tehBoost = subObjIdHits.map(subObjId => request.boost.fun(boostkvStore.getValue(subObjId) + request.boost.param))
+        //     for (var i = 0; i < result.valueIdDocidScores.length; i++) {
+        //         result.valueIdDocidScores[i] = result.valueIdDocidScores[i] * tehBoost[i]
+        //     }
+        // }
+
+        // let mainWithScore
+
+        // let paths = util.getStepsToAnchor(origPath)
+        // paths.forEach(pathToAnchor => {
+        //     let kvStore = new IndexKeyValueStore(pathToAnchor+'.valueIdToParent.valIds', pathToAnchor+'.valueIdToParent.mainIds')                
+        //     let mainds = subObjIdHits.map(subObjId => kvStore.getValue(subObjId))
+        //     mainWithScore = mainds.map((id, index) => ({'id':id, 'score':result.valueIdDocidScores[index]})) // TODO subObjId/valueIdDocidScores => mainid is not 1:1
+        // })
+
+        let nextLevelHits = {}
+        let mainWithScore = []
+
+        let paths = util.getStepsToAnchor(origPath)
+
+        for(let i=paths.length ; i -- > 0;){
+            let path = paths[i]
+            let isLast = i === (paths.length -1)
+            let pathName = util.getPathName(path, isLast) // last path is for the textindex
+
+            let kvStore = new IndexKeyValueStore(pathName+'.valueIdToParent.valIds', pathName+'.valueIdToParent.mainIds')                
+            for (let valueId in hits) {
+                let score = hits[valueId]
+                let values = kvStore.getValues(parseInt(valueId, 10))
+                values.forEach(parentValId => {
+                    if(nextLevelHits[parentValId]) nextLevelHits[parentValId] += score
+                    else nextLevelHits[parentValId] = score
+                })
+            }
+            hits = nextLevelHits
+            nextLevelHits = {}
+
+        }
+
+
+        for (let valueId in hits) {
+            mainWithScore.push({'id':parseInt(valueId, 10), 'score':hits[valueId]})
+        }
+
+        mainWithScore.sort(function(a, b) {
+            return ((a.score > b.score) ? -1 : ((a.score == b.score) ? 0 : 1))
         })
 
-
+        console.log(mainWithScore)
+        console.timeEnd('SearchTime Netto')
+        return mainWithScore
     })
 
+    // })
 
 }
 

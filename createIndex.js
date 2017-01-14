@@ -48,7 +48,6 @@ function getAllterms(data, path, options, existingTerms){
 function forEachElementInPath(data, path, cb) {
     path = util.removeArrayMarker(path)
     let paths = path.split('.')
-    let subObjId = 0
     let valueId = 0
     let currentEl
     for (let mainId = 0; mainId < data.length; mainId++) {  
@@ -63,27 +62,25 @@ function forEachElementInPath(data, path, cb) {
             if(_.isArray(currentEl)){
                 if (_.last(paths) == comp){
                     currentEl.forEach(el => {
+                        cb(el, mainId, valueId)
                         valueId++
-                        subObjId++
-                        cb(el, valueId, mainId, subObjId)
                     })
                 }else{
                     comp = paths[++i] // move to next level
                     for(let subarrEl of currentEl){
                         if (subarrEl[comp] === undefined) continue
-                        subObjId++
 
                         if (_.last(paths) == comp){
-                            cb(subarrEl[comp], mainId, subObjId)
+                            cb(subarrEl[comp], mainId, valueId)
                         }else{
                             throw new Error('level 3 not supported')
                         }
+                        valueId++
                     }
                 }
             }else{
                 if (_.last(paths) == comp){
-                    valueId++
-                    cb(currentEl, valueId, mainId, subObjId)
+                    cb(currentEl, mainId, valueId)
                 }
             }
 
@@ -127,7 +124,9 @@ function forEachToken(normalizedText, cb){
     // }
 }
 
-
+// function isLastPath(paths, path){
+//     return paths.indexOf(path) === (paths.length -1)
+// }
 
 function createFulltextIndex(data, path, options){
     // let subfolder = options.subfolder || ''
@@ -142,64 +141,47 @@ function createFulltextIndex(data, path, options){
         let tokens = []
 
         let paths = util.getStepsToAnchor(origPath)
-        console.log("AKSJD ALSKJD HLAKSJDH")
+        console.log("StepsToAnchor")
         console.log(paths)
-        paths.forEach(pathToAnchor => {
-            console.log("ASDASDASDASD")
-            console.log(pathToAnchor)
-            forEachElementInPath(data, pathToAnchor, (value, valueId, mainId, subObjId) => {
-                console.log("AJAJAJAJAJAAJ")
-                console.log(valueId)
-                console.log(subObjId)
-                console.log(mainId)
-                console.log(value)
+
+        paths.forEach((pathToAnchor, index) => {
+            let level = util.getLevel(pathToAnchor)
+            let tuples = []
+
+            let isLast = index === (paths.length -1)
+
+            forEachElementInPath(data, pathToAnchor, function (value, mainId, subObjId) {
+                if (isLast){
+                    let normalizedText = normalizeText(value)
+                    let valId = getValueID(allTerms, normalizedText)
+
+                    // tuples.push((subObjId !== undefined) ? [valId, mainId, subObjId] : [valId, mainId])
+                    tuples.push([valId , arguments[level + 1]])
+                    if (options.tokenize && normalizedText.split(' ').length > 1) 
+                        forEachToken(normalizedText, token => tokens.push([getValueID(allTerms, token), valId]))
+
+                }else{
+                    tuples.push([arguments[level + 1], arguments[1]])
+                }
             })
+            tuples.sort(sortFirstColumn)
+            let pathName = util.getPathName(pathToAnchor, isLast) // last path is for the textindex
+            writeFileSync(pathName+'.valueIdToParent.valIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
+            writeFileSync(pathName+'.valueIdToParent.mainIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
         })
 
-        forEachElementInPath(data, path, (value, valueId, mainId, subObjId) => {
-            let normalizedText = normalizeText(value)
-            let valId = getValueID(allTerms, normalizedText)
-            
-            tuples.push(subObjId ? [valId, mainId, subObjId] : [valId, mainId])
-
-            if (options.tokenize && normalizedText.split(' ').length > 1) 
-                forEachToken(normalizedText, token => tokens.push([getValueID(allTerms, token), mainId, subObjId, valId]))
-                // normalizedText.split(' ').forEach(token => tokens.push([getValueID(allTerms, token), mainId, subObjId, valId]))
-        })
-
-        tuples.sort(sortFirstColumn)
-        tokens.sort(sortFirstColumn)
-        let subObjToMain = tuples.map(el => [el[2], el[1]]).sort(sortFirstColumn)
-        subObjToMain = _.uniqBy(subObjToMain, el => el[0])
-
-        writeFileSync(path+'.subObjToMain.subObjIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[0])).buffer))
-        writeFileSync(path+'.subObjToMain.mainIds', new Buffer(new Uint32Array(subObjToMain.map(tuple => tuple[1])).buffer))
-
-        writeFileSync(path+'.valIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
-        writeFileSync(path+'.mainIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
-
-        console.log(tuples.map(tuple => tuple[1]))
-
-
-        // let buf = fs.readFileSync(path)
-        // return new Uint32Array(buf.buffer, buf.offset, buf.buffer.length)
-
-        // let mainids = Array.from(require('./loadUint32')(path+'.mainids'))
-        // console.log(mainids)
-
-        let subObjIds = tuples.map(tuple => tuple[2])
-        writeFileSync(path+'.subObjIds', new Buffer(new Uint32Array(subObjIds).buffer))
+        // writeFileSync(origPath+'.valIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[0])).buffer))
+        // writeFileSync(origPath+'.mainIds', new Buffer(new Uint32Array(tuples.map(tuple => tuple[1])).buffer))
 
         if (tokens.length > 0) {
-            writeFileSync(path+'.tokens.valIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[0])).buffer))
-            writeFileSync(path+'.tokens.mainIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[1])).buffer))
-            writeFileSync(path+'.tokens.subObjIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[2])).buffer))
-            writeFileSync(path+'.tokens.parentValId', new Buffer(new Uint32Array(tokens.map(tuple => tuple[3])).buffer))
+            tokens.sort(sortFirstColumn)
+            writeFileSync(origPath+'.tokens.tokenValIds', new Buffer(new Uint32Array(tokens.map(tuple => tuple[0])).buffer))
+            writeFileSync(origPath+'.tokens.parentValId', new Buffer(new Uint32Array(tokens.map(tuple => tuple[1])).buffer))
         }
         // writeFileSync(path, new Buffer(JSON.stringify(allTerms)))
-        writeFileSync(path, allTerms.join('\n'))
+        writeFileSync(origPath, allTerms.join('\n'))
 
-        creatCharOffsets(path, resolve)
+        creatCharOffsets(origPath, resolve)
     })
     .catch(err => {
         throw new Error('Error while creating index: ' + path + ' : '+err.toString())
@@ -247,7 +229,7 @@ function createBoostIndex(data, path, options, cb){
     options = options || {}
 
     let tuples = []
-    forEachElementInPath(data, path, (value, valueId, mainId, subObjId) => {
+    forEachElementInPath(data, path, (value, mainId, subObjId) => {
         if (options.type == 'int') {
             tuples.push([subObjId, value])
         }else{
