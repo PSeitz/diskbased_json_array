@@ -1,6 +1,6 @@
 'use strict'
-// let msgpack = require('msgpack-lite')
-let decode = require('./node_modules/msgpack-lite/lib/decode').decode
+let decode = require('msgpack-lite').decode
+// let decode = require(process.cwd()+'/node_modules/msgpack-lite/lib/decode').decode
 let fs = require('fs')
 let useMsgPack = true
 
@@ -24,7 +24,8 @@ function ensureFolderExists(filename){
 
 function writeArray(filename, arr){
     ensureFolderExists(filename)
-    let encode = require('./node_modules/msgpack-lite/lib/encode').encode
+    // let encode = require(process.cwd()+'/node_modules/msgpack-lite/lib/encode').encode
+    let encode = require('msgpack-lite').encode
     let offsets = []
 
     let fd = fs.openSync(filename, 'w')
@@ -48,7 +49,7 @@ class Loader{
         this.offsetLoading = new Promise((resolve, reject) => {
             fs.readFile(this.filename+'.offsets', (err, buf) => {
                 if (err) return reject(err)
-                this.offsets = new Uint32Array(buf.buffer, buf.offset, buf.buffer.length)
+                this.offsets = new Uint32Array(buf.buffer, buf.offset, buf.byteLength/4)
                 resolve(this.offsets)
             })
         })
