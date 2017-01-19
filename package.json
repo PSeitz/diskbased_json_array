@@ -17,16 +17,6 @@
   },
   "homepage": "https://github.com/PSeitz/diskbased_json_array#readme",
   "dependencies": {
-    "bluebird": "^3.4.6",
-    "chai": "^3.5.0",
-    "chai-as-promised": "^6.0.0",
-    "fast-levenshtein": "^2.0.5",
-    "lodash": "^4.16.4",
-    "mkdirp": "^0.5.1",
-    "mocha": "^3.2.0",
     "msgpack-lite": "^0.1.26"
-  },
-  "devDependencies": {
-    "chai-as-promised": "^6.0.0"
   }
 }
